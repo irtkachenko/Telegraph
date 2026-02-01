@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore } from '@/store/usePresenceStore';
-import type { FullChat, Message, User } from '@/types';
+import type { FullChat, Message, User, Attachment } from '@/types';
 
 // 1. Отримання чатів
 export function useChats() {
@@ -52,17 +52,6 @@ export function useChats() {
 
       // Use data directly since it's already in snake_case format
       const normalizedChats = data as FullChat[];
-      
-      // Debug logging for chat data
-      console.log('📋 Chats data from Supabase:', normalizedChats.map(chat => ({
-        id: chat.id,
-        user_id: chat.user_id,
-        recipient_id: chat.recipient_id,
-        user_last_read: chat.user_last_read,
-        recipient_last_read: chat.recipient_last_read,
-        lastMessage: chat.messages?.[0]?.id,
-        lastMessageSender: chat.messages?.[0]?.sender_id
-      })));
       
       // Сортуємо за датою останнього повідомлення (Bubble to top)
       return normalizedChats.sort((a: FullChat, b: FullChat) => {
@@ -183,8 +172,9 @@ export function useMessages(chatId: string) {
         /**
          * ВИПРАВЛЕННЯ PGRST200:
          * Використовуємо 'replyTo:reply_to_id(*)' замість імені ключа fkey.
+         * Додаємо joined user data для оптимізації (використовуємо подвійні лапки оскільки 'user' - зарезервоване слово)
          */
-        .select('*, reply_to:reply_to_id(*)')
+        .select('*, reply_to:reply_to_id(*), "user":sender_id(id, name, image)')
         .eq('chat_id', chatId)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -194,8 +184,11 @@ export function useMessages(chatId: string) {
         console.error("Помилка завантаження повідомлень:", error.message);
         throw error;
       }
-      // Use data directly since it's already in snake_case format
-      const normalizedData = (data || []) as Message[];
+      // Cast response data with proper typing for attachments
+      const normalizedData = (data as unknown as Message[]).map((msg) => ({
+        ...msg,
+        attachments: msg.attachments || []
+      }));
       
       // Повертаємо масив (нові повідомлення будуть в кінці масиву сторінки)
       return normalizedData.reverse();
@@ -204,7 +197,7 @@ export function useMessages(chatId: string) {
     getPreviousPageParam: (firstPage): string | undefined => {
       if (!firstPage || firstPage.length < 50) return undefined;
       const createdAt = (firstPage[0] as Message).created_at;
-      return createdAt instanceof Date ? createdAt.toISOString() : createdAt;
+      return createdAt as string;
     },
     getNextPageParam: () => undefined,
     enabled: !!chatId,
@@ -392,7 +385,7 @@ export function useSendMessage(chatId: string) {
     }: { 
       content: string; 
       reply_to_id?: string;
-      attachments?: any[];
+      attachments?: Attachment[];
     }) => {
       if (!user) throw new Error('Ви не авторизовані');
 
@@ -483,9 +476,28 @@ export function useSendMessage(chatId: string) {
     },
 
     onSuccess: (savedMessage) => {
-      // Коли прийшла відповідь від бази, замінюємо "temp" повідомлення на реальне
+      // Replace temp message with real message, but be more careful about duplicates
       queryClient.setQueryData(['messages', chatId], (old: any) => {
         if (!old) return old;
+        
+        // Check if the real message already exists (might have been added by real-time)
+        const alreadyExists = old.pages.some((page: any[]) =>
+          page.some((msg: any) => msg.id === savedMessage.id)
+        );
+        
+        if (alreadyExists) {
+          // If it already exists, just remove any temp messages with same content
+          return {
+            ...old,
+            pages: old.pages.map((page: any[]) =>
+              page.filter((msg: any) => 
+                !(msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content)
+              )
+            ),
+          };
+        }
+        
+        // Otherwise, replace temp message with real message
         return {
           ...old,
           pages: old.pages.map((page: any[]) =>
@@ -511,30 +523,25 @@ export function useDeleteMessage(chatId: string) {
 
   return useMutation({
     mutationFn: async (messageId: string) => {
-      console.log('🗑️ Deleting message:', { chatId, messageId });
-      
       const { data, error } = await supabase
         .from('messages')
         .delete()
         .eq('id', messageId)
-        .select(); 
+        .eq('chat_id', chatId);
 
       if (error) {
-        console.error('❌ Delete message error:', error);
         throw error;
       }
-      
-      console.log('✅ Delete message result:', data);
       
       if (!data || data.length === 0) {
         throw new Error('Немає прав на видалення або повідомлення вже видалено');
       }
+
       return data;
     },
     // Чітко вказуємо, що чекаємо string
     onMutate: async (messageId: string) => {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
-
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
       queryClient.setQueryData(['messages', chatId], (old: any) => {
@@ -627,27 +634,100 @@ export function useScrollToMessage(
   hasPreviousPage: boolean,
 ) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+  // Monitor messages array changes and retry scrolling if we have a pending target
+  useEffect(() => {
+    if (pendingScrollTarget && !isFetchingHistory) {
+      const index = messages.findIndex((m: Message) => m.id === pendingScrollTarget);
+      
+      if (index !== -1) {
+        // Message found, scroll to it
+        setTimeout(() => {
+          virtuosoRef.current?.scrollToIndex({
+            index,
+            behavior: 'smooth',
+            align: 'center',
+          });
+          setHighlightedId(pendingScrollTarget);
+          setTimeout(() => setHighlightedId(null), 3000);
+          setPendingScrollTarget(null); // Clear pending target
+        }, 100);
+      }
+    }
+  }, [messages, pendingScrollTarget, isFetchingHistory, virtuosoRef]);
 
   const scrollToMessage = useCallback(
     async (messageId: string, options?: { align?: 'start' | 'center' | 'end'; behavior?: 'smooth' | 'auto' }) => {
-      const index = messages.findIndex((m: Message) => m.id === messageId);
-
-      if (index !== -1) {
-        virtuosoRef.current?.scrollToIndex({
-          index,
-          behavior: options?.behavior || 'smooth',
-          align: options?.align || 'center',
-        });
-        setHighlightedId(messageId);
-        setTimeout(() => setHighlightedId(null), 2000);
-      } else {
-        if (hasPreviousPage) {
-          fetchPreviousPage();
-          toast.info('Підвантажуємо історію...');
+      const maxPagesToFetch = 10;
+      let pagesFetched = 0;
+      
+      const tryScroll = (currentMessages: Message[]) => {
+        const index = currentMessages.findIndex((m: Message) => m.id === messageId);
+        
+        if (index !== -1) {
+          // Message found, scroll to it with proper timing
+          setTimeout(() => {
+            virtuosoRef.current?.scrollToIndex({
+              index,
+              behavior: options?.behavior || 'smooth',
+              align: options?.align || 'center',
+            });
+            setHighlightedId(messageId);
+            setTimeout(() => setHighlightedId(null), 3000);
+          }, 100);
+          
+          return true;
         }
+        return false;
+      };
+
+      // First attempt with current messages
+      if (tryScroll(messages)) {
+        return;
       }
+
+      // Message not found, try to fetch previous pages
+      if (!hasPreviousPage) {
+        toast.error('Message not found in chat history');
+        return;
+      }
+
+      toast.info('Loading chat history...');
+      setPendingScrollTarget(messageId);
+      setIsFetchingHistory(true);
+      
+      // Fetch loop with limit to prevent infinite loops
+      const fetchLoop = async () => {
+        while (pagesFetched < maxPagesToFetch && hasPreviousPage) {
+          pagesFetched++;
+          
+          // Wait for the fetch to complete and state to update
+          await new Promise<void>((resolve) => {
+            fetchPreviousPage();
+            
+            // Wait a bit for React Query to update the state
+            setTimeout(() => {
+              resolve();
+            }, 300);
+          });
+        }
+        
+        setIsFetchingHistory(false);
+        
+        if (pagesFetched >= maxPagesToFetch) {
+          toast.error('Message not found after loading history');
+          setPendingScrollTarget(null);
+        } else if (!hasPreviousPage) {
+          toast.error('Message not found in available history');
+          setPendingScrollTarget(null);
+        }
+      };
+
+      fetchLoop();
     },
-    [messages, hasPreviousPage, fetchPreviousPage, virtuosoRef],
+    [messages, hasPreviousPage, fetchPreviousPage, virtuosoRef, isFetchingHistory],
   );
 
   return { scrollToMessage, highlightedId };

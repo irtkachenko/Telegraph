@@ -90,6 +90,44 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return readMessage?.created_at || null;
   }, [chat, user, messages]);
 
+  // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ ---
+  const uniqueParticipants = useMemo(() => {
+    const participants = new Map<string, User>();
+    
+    // Add current user
+    if (user) {
+      participants.set(user.id, user);
+    }
+    
+    // Add chat participants from chat details
+    if (chat?.participants) {
+      chat.participants.forEach((participant: User) => {
+        participants.set(participant.id, participant);
+      });
+    }
+    
+    // Add unique senders from messages (using joined user data)
+    messages.forEach((message: Message) => {
+      if (message.sender_id && !participants.has(message.sender_id)) {
+        // Use joined user data if available, otherwise create minimal user object
+        if (message.user) {
+          participants.set(message.sender_id, {
+            id: message.sender_id,
+            name: message.user.name,
+            email: '', // Required field, use empty string as fallback
+            email_verified: null,
+            image: message.user.image,
+            last_seen: null
+          } as User);
+        } else if (message.sender) {
+          participants.set(message.sender_id, message.sender);
+        }
+      }
+    });
+    
+    return Array.from(participants.values());
+  }, [user, chat?.participants, messages]);
+
   if (isChatLoading || (isMessagesLoading && !messages.length)) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 bg-background">

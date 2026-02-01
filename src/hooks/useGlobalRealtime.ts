@@ -166,6 +166,8 @@ export function useGlobalRealtime(user: User | null) {
             if (!newChat) return;
             const isParticipant = !newChat.user_id || newChat.user_id === userId || newChat.recipient_id === userId;
             if (isParticipant) {
+              // Invalidate chats query to fetch fresh data with relationships
+              // This ensures user images and other relationship data are loaded
               queryClient.invalidateQueries({ queryKey: ['chats'] });
             }
           }
@@ -247,7 +249,8 @@ export function useGlobalRealtime(user: User | null) {
           const messageExists = allMessages.some(m => 
             m.id === newMessage.id || 
             (m.content === newMessage.content && 
-             Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 1000)
+             m.sender_id === newMessage.sender_id &&
+             Math.abs(new Date(m.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 2000)
           );
           
           if (messageExists) {
@@ -297,7 +300,21 @@ export function useGlobalRealtime(user: User | null) {
              
              return { ...oldData, pages: newPages };
           });
-          queryClient.invalidateQueries({ queryKey: ['chats'] });
+          
+          // Update chats cache manually instead of invalidating
+          queryClient.setQueryData(['chats'], (oldChats: FullChat[] | undefined) => {
+            if (!oldChats) return oldChats;
+            
+            return oldChats.map((chat) => {
+              if (chat.id !== chatId) return chat;
+              
+              // Update the chat's latest message preview
+              return {
+                ...chat,
+                messages: [enhancedMessage as unknown as Message],
+              };
+            });
+          });
         }
       )
       .on(

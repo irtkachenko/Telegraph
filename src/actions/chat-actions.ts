@@ -21,7 +21,6 @@ async function getCurrentUser() {
     } = await supabase.auth.getSession();
 
     if (sessionError || !session?.user) {
-      console.log('No active session found');
       return null;
     }
 

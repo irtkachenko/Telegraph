@@ -31,7 +31,6 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "framer-motion": "^12.29.0",
-    "humps": "^2.0.1",
     "linkify-react": "^4.3.2",
     "linkifyjs": "^4.3.2",
     "lru-cache": "^11.2.5",
@@ -51,7 +50,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/humps": "^2.0.6",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",

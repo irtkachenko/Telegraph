@@ -1,27 +1,6 @@
-import { 
-  users, 
-  chats, 
-  messages 
-} from '@/db/schema';
+import { Database } from './supabase';
 
-// Automated type inference from Drizzle schema
-export type User = typeof users.$inferSelect;
-export type Chat = typeof chats.$inferSelect;
-export type Message = typeof messages.$inferSelect & {
-  // UI-specific fields with snake_case naming
-  reply_details?: {
-    id: string;
-    sender: { name?: string | null };
-    content: string;
-    sender_id?: string;
-    attachments?: Attachment[];
-  } | null;
-  reply_to?: Message;
-  sender?: User | null;
-  is_optimistic?: boolean;
-};
-
-// Keep Attachment interface as it's used in schema
+// Define Attachment interface inline to avoid circular import
 export interface Attachment {
   id: string;
   type: 'image' | 'video' | 'file';
@@ -35,6 +14,31 @@ export interface Attachment {
     expired?: boolean;
   };
 }
+
+// Use generated types from Supabase for consistency
+export type User = Database['public']['Tables']['user']['Row'];
+export type Chat = Database['public']['Tables']['chats']['Row'];
+export type Message = Database['public']['Tables']['messages']['Row'] & {
+  // Override attachments to be properly typed
+  attachments: Attachment[] | null;
+  // UI-specific fields with snake_case naming
+  reply_details?: {
+    id: string;
+    sender: { name?: string | null };
+    content: string;
+    sender_id?: string;
+    attachments?: Attachment[];
+  } | null;
+  reply_to?: Message;
+  sender?: User | null;
+  // Joined user data from optimized query
+  user?: {
+    id: string;
+    name?: string | null;
+    image?: string | null;
+  } | null;
+  is_optimistic?: boolean;
+};
 
 // Extended types for UI with relations
 export type FullChat = Chat & {

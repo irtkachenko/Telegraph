@@ -43,6 +43,16 @@ export default function ChatList() {
           const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
           const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
           const partnerImage = partner?.image;
+          
+          // Debug logging to help identify missing partner data
+          if (!partner) {
+            console.warn('Chat missing partner data:', {
+              chatId: chat.id,
+              userId: chat.user_id,
+              recipientId: chat.recipient_id,
+              currentUserId
+            });
+          }
 
           const lastMessage = chat.messages?.[0];
           
@@ -57,21 +67,6 @@ export default function ChatList() {
           const isUnread = lastMessage && 
                           lastMessage.sender_id !== currentUserId && 
                           (!readAt || new Date(lastMessage.created_at) > new Date(readAt));
-
-          // Debug logging for unread status
-          console.log('🔍 ChatList Unread Check:', {
-            chatId: chat.id,
-            isCurrentUser,
-            lastMessage: lastMessage?.id,
-            lastMessageSender: lastMessage?.sender_id,
-            currentUserId,
-            readMessageId,
-            readMessage,
-            readAt,
-            isUnread,
-            lastMessageCreatedAt: lastMessage?.created_at,
-            comparison: readAt ? new Date(lastMessage.created_at) > new Date(readAt) : 'no readAt'
-          });
 
           return (
             <ContextMenu key={chat.id}>
@@ -121,7 +116,7 @@ export default function ChatList() {
                       <p className="text-[11px] text-gray-500 truncate flex-1">
                         {lastMessage?.sender_id === currentUserId && 'Ви: '}
                         {lastMessage?.content ||
-                          (lastMessage?.attachments?.length ? '📎 Медіа' : 'Немає повідомлень')}
+                          (Array.isArray(lastMessage?.attachments) && lastMessage.attachments.length > 0 ? '📎 Медіа' : 'Немає повідомлень')}
                       </p>
                       {isUnread && (
                         <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0" />

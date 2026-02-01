@@ -53,11 +53,25 @@ export const MessageBubble = memo(
         layout
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
         className={cn(
-          'flex w-full mb-3 px-2.5 sm:px-4 transition-colors duration-500',
+          'flex w-full mb-3 px-2.5 sm:px-4 transition-all duration-500 relative',
           isMe ? 'justify-end' : 'justify-start',
-          isHighlighed ? 'bg-white/10 py-2 rounded-lg' : '',
         )}
       >
+        {/* Highlight overlay */}
+        <AnimatePresence>
+          {isHighlighed && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-blue-500/30 rounded-lg pointer-events-none"
+              style={{
+                boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
+              }}
+            />
+          )}
+        </AnimatePresence>
         <ContextMenu>
           <ContextMenuTrigger className="max-w-[88%] sm:max-w-[70%] lg:max-w-[60%] min-w-0 block">
             <div className={cn('flex flex-col min-w-0 w-full', isMe ? 'items-end' : 'items-start')}>
@@ -157,40 +171,47 @@ export const MessageBubble = memo(
                   className={cn(
                     'flex items-center justify-end gap-1 mt-1.5 select-none w-full',
                     isMe ? 'text-blue-100/50' : 'text-white/40',
+                    message.is_optimistic && 'opacity-70',
                   )}
                 >
                   <span className="text-[9px] font-medium">{formatMessageDate(message.created_at)}</span>
 
-                  {isMe && (
+                  {message.is_optimistic ? (
                     <div className="flex items-center ml-1">
-                      <AnimatePresence mode="wait">
-                        {isRead ? (
-                          <motion.div
-                            key="read"
-                            initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
-                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                            exit={{ opacity: 0, scale: 0.5 }}
-                            transition={{
-                              type: 'spring',
-                              stiffness: 500,
-                              damping: 30,
-                            }}
-                          >
-                            <CheckCheck className="w-3 h-3 text-blue-400" strokeWidth={3} />
-                          </motion.div>
-                        ) : (
-                          <motion.div
-                            key="sent"
-                            initial={{ opacity: 0, scale: 0.5 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.5 }}
-                            transition={{ duration: 0.15 }}
-                          >
-                            <Check className="w-3 h-3 text-blue-100/40" strokeWidth={3} />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      <Clock className="w-3 h-3 text-blue-300/60" strokeWidth={2} />
                     </div>
+                  ) : (
+                    isMe && (
+                      <div className="flex items-center ml-1">
+                        <AnimatePresence mode="wait">
+                          {isRead ? (
+                            <motion.div
+                              key="read"
+                              initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{
+                                type: 'spring',
+                                stiffness: 500,
+                                damping: 30,
+                              }}
+                            >
+                              <CheckCheck className="w-3 h-3 text-blue-400" strokeWidth={3} />
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              key="sent"
+                              initial={{ opacity: 0, scale: 0.5 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.5 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <Check className="w-3 h-3 text-blue-100/40" strokeWidth={3} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
