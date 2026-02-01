@@ -1,19 +1,16 @@
 'use client';
 
-import { memo } from 'react';
 import { MessageSquare, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { ChatList } from './ChatList';
-import { ContactsList } from './ContactsList';
 import { ContactItem } from './ContactItem';
+import { ContactsList } from './ContactsList';
 import { SearchInput } from './SearchInput';
 
 function SidebarShellBase() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
-
 
   const tab = searchParams.get('tab') || 'chats';
   const query = searchParams.get('q') || '';

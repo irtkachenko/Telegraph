@@ -1,12 +1,11 @@
 'use client';
 
+import type { User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
-
+import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
 import type { FullChat, Message } from '@/types';
-import type { User } from '@supabase/supabase-js';
 
 interface RealtimePayload<T = Record<string, unknown>> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -16,7 +15,10 @@ interface RealtimePayload<T = Record<string, unknown>> {
 }
 
 // Helper function to validate payload structure
-function validatePayload<T>(payload: RealtimePayload<T>, requiredFields: (keyof T)[]): payload is RealtimePayload<T> {
+function validatePayload<T>(
+  payload: RealtimePayload<T>,
+  requiredFields: (keyof T)[],
+): payload is RealtimePayload<T> {
   if (!payload || typeof payload !== 'object') {
     console.error('Invalid payload structure:', payload);
     return false;
@@ -52,18 +54,25 @@ function validatePayload<T>(payload: RealtimePayload<T>, requiredFields: (keyof 
 }
 
 // Helper function to check if message already exists in cache
-function messageExistsInCache(messageId: string, content: string, senderId: string, createdAt: string, allMessages: Message[]): boolean {
+function messageExistsInCache(
+  messageId: string,
+  content: string,
+  senderId: string,
+  createdAt: string,
+  allMessages: Message[],
+): boolean {
   // First check by ID (most reliable)
-  const existingById = allMessages.find(m => m.id === messageId);
+  const existingById = allMessages.find((m) => m.id === messageId);
   if (existingById) return true;
 
   // Fallback: check by content, sender, and timestamp (within 2 seconds)
-  const existingByContent = allMessages.find(m => 
-    m.content === content && 
-    m.sender_id === senderId &&
-    Math.abs(new Date(m.created_at).getTime() - new Date(createdAt).getTime()) < 2000
+  const existingByContent = allMessages.find(
+    (m) =>
+      m.content === content &&
+      m.sender_id === senderId &&
+      Math.abs(new Date(m.created_at).getTime() - new Date(createdAt).getTime()) < 2000,
   );
-  
+
   return !!existingByContent;
 }
 
@@ -75,21 +84,19 @@ function getActiveChatId(queryClient: ReturnType<typeof useQueryClient>): string
   if (routerState?.query?.chatId) {
     return routerState.query.chatId;
   }
-  
+
   // Fallback: check if there's a recently accessed messages query
   const queryCache = queryClient.getQueryCache().getAll();
-  const messagesQueries = queryCache.filter(query => 
-    query.queryKey[0] === 'messages' && 
-    query.state.status === 'success'
+  const messagesQueries = queryCache.filter(
+    (query) => query.queryKey[0] === 'messages' && query.state.status === 'success',
   );
-  
+
   if (messagesQueries.length > 0) {
     // Return the most recently accessed messages query
-    return messagesQueries.sort((a, b) => 
-      b.state.dataUpdatedAt - a.state.dataUpdatedAt
-    )[0].queryKey[1] as string;
+    return messagesQueries.sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt)[0]
+      .queryKey[1] as string;
   }
-  
+
   return null;
 }
 
@@ -119,10 +126,10 @@ interface ChatPayload {
 function createThrottle<T extends (...args: any[]) => void>(func: T, delay: number): T {
   let timeoutId: NodeJS.Timeout | null = null;
   let lastExecTime = 0;
-  
+
   return ((...args: Parameters<T>) => {
     const currentTime = Date.now();
-    
+
     if (currentTime - lastExecTime > delay) {
       func(...args);
       lastExecTime = currentTime;
@@ -130,10 +137,13 @@ function createThrottle<T extends (...args: any[]) => void>(func: T, delay: numb
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      timeoutId = setTimeout(() => {
-        func(...args);
-        lastExecTime = Date.now();
-      }, delay - (currentTime - lastExecTime));
+      timeoutId = setTimeout(
+        () => {
+          func(...args);
+          lastExecTime = Date.now();
+        },
+        delay - (currentTime - lastExecTime),
+      );
     }
   }) as T;
 }
@@ -162,6 +172,29 @@ export function useGlobalRealtime(user: User | null) {
 export function useChatRealtime(chatId: string | null, user: User | null) {
   const queryClient = useQueryClient();
   const channelRef = useRef<any>(null);
+  const mountedRef = useRef<boolean>(true);
+
+  // Cleanup function to ensure proper channel removal
+  const cleanupChannel = useCallback(() => {
+    if (channelRef.current) {
+      try {
+        supabase.removeChannel(channelRef.current);
+        console.log(`Unsubscribed from chat ${chatId} realtime updates`);
+      } catch (error) {
+        console.error('Error removing realtime channel:', error);
+      } finally {
+        channelRef.current = null;
+      }
+    }
+  }, [chatId]);
+
+  // Set mounted ref for cleanup tracking
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const handleMessageInsert = (payload: RealtimePayload<MessagePayload>) => {
     // Validate payload structure
@@ -171,36 +204,50 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
     }
 
     const newMessage = payload.new;
-    if (!newMessage || !chatId) return;
-    
+    if (!newMessage || !chatId || !mountedRef.current) return;
+
     // Check if this message is for the current chat
     if (newMessage.chat_id !== chatId) {
-      console.warn(`Received message for different chat: ${newMessage.chat_id} (current: ${chatId})`);
+      console.warn(
+        `Received message for different chat: ${newMessage.chat_id} (current: ${chatId})`,
+      );
       return;
     }
-    
+
     // Get current cache and check for duplicates
-    const currentCache = queryClient.getQueryData(['messages', chatId]) as InfiniteData<Message[]> | undefined;
+    const currentCache = queryClient.getQueryData(['messages', chatId]) as
+      | InfiniteData<Message[]>
+      | undefined;
     const allMessages = currentCache?.pages.flat() || [];
-    
+
     // Use the improved deduplication function
-    if (messageExistsInCache(newMessage.id, newMessage.content, newMessage.sender_id, newMessage.created_at, allMessages)) {
+    if (
+      messageExistsInCache(
+        newMessage.id,
+        newMessage.content,
+        newMessage.sender_id,
+        newMessage.created_at,
+        allMessages,
+      )
+    ) {
       console.debug(`Message ${newMessage.id} already exists in cache, skipping`);
       return;
     }
-    
+
     // Look up quoted message if this is a reply
     let quotedMessage = null;
     if (newMessage.reply_to_id) {
-      quotedMessage = allMessages.find(m => m.id === newMessage.reply_to_id);
+      quotedMessage = allMessages.find((m) => m.id === newMessage.reply_to_id);
       if (!quotedMessage) {
         // Search in other chat caches if not found in current chat
         const allChats = queryClient.getQueryData(['chats']) as FullChat[] | undefined;
         if (allChats) {
           for (const chat of allChats) {
-            const chatCache = queryClient.getQueryData(['messages', chat.id]) as InfiniteData<Message[]> | undefined;
+            const chatCache = queryClient.getQueryData(['messages', chat.id]) as
+              | InfiniteData<Message[]>
+              | undefined;
             const chatMessages = chatCache?.pages.flat() || [];
-            const found = chatMessages.find(m => m.id === newMessage.reply_to_id);
+            const found = chatMessages.find((m) => m.id === newMessage.reply_to_id);
             if (found) {
               quotedMessage = found;
               break;
@@ -209,44 +256,60 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
         }
       }
     }
-    
+
     // Create enhanced message with quoted data
     const enhancedMessage = {
       ...newMessage,
-      reply_to: quotedMessage
+      reply_to: quotedMessage,
     };
-    
+
     // Check if this is the active chat to determine update strategy
     const activeChatId = getActiveChatId(queryClient);
     const isActiveChat = activeChatId === chatId;
-    
-    // Batch updates to prevent UI flickering
-    queryClient.setQueryData(['messages', chatId], (oldData: InfiniteData<Message[]> | undefined) => {
-       if (!oldData) return oldData;
-       const newPages = [...oldData.pages];
-       const lastPageIdx = newPages.length - 1;
-       
-       // Double-check for duplicates in case of race condition
-       const exists = newPages.some(page => page.some((m: Message) => m.id === enhancedMessage.id));
-       if (exists) return oldData;
-       
-       // Ensure the last page exists before appending
-       if (lastPageIdx >= 0) {
-         newPages[lastPageIdx] = [...newPages[lastPageIdx], enhancedMessage as unknown as Message];
-       } else {
-         newPages[0] = [enhancedMessage as unknown as Message];
-       }
-       
-       return { ...oldData, pages: newPages };
-    });
-    
-    // Update chats cache manually instead of invalidating
+
+    // Optimized cache update that respects pagination
+    queryClient.setQueryData(
+      ['messages', chatId],
+      (oldData: InfiniteData<Message[]> | undefined) => {
+        if (!oldData || !mountedRef.current) return oldData;
+
+        const newPages = [...oldData.pages];
+        const lastPageIdx = newPages.length - 1;
+
+        // Double-check for duplicates in case of race condition
+        const exists = newPages.some((page) =>
+          page.some((m: Message) => m.id === enhancedMessage.id),
+        );
+        if (exists) return oldData;
+
+        // Ensure the last page exists before appending
+        if (lastPageIdx >= 0 && newPages[lastPageIdx]) {
+          // Check if adding to last page would exceed reasonable limits
+          if (newPages[lastPageIdx].length < 100) {
+            // Prevent page bloat
+            newPages[lastPageIdx] = [
+              ...newPages[lastPageIdx],
+              enhancedMessage as unknown as Message,
+            ];
+          } else {
+            // Create a new page if the last one is too large
+            newPages.push([enhancedMessage as unknown as Message]);
+          }
+        } else {
+          newPages[0] = [enhancedMessage as unknown as Message];
+        }
+
+        return { ...oldData, pages: newPages };
+      },
+    );
+
+    // Update chats cache manually instead of invalidating to prevent pagination conflicts
     queryClient.setQueryData(['chats'], (oldChats: FullChat[] | undefined) => {
-      if (!oldChats) return oldChats;
-      
+      if (!oldChats || !mountedRef.current) return oldChats;
+
       return oldChats.map((chat) => {
         if (chat.id !== chatId) return chat;
-        
+
         // Update the chat's latest message preview
         return {
           ...chat,
@@ -254,7 +317,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
         };
       });
     });
-    
+
     // If this is not the active chat, we might want to show a notification
     // This is where you could integrate with a notification system
     if (!isActiveChat) {
@@ -271,35 +334,40 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
     }
 
     const updatedMessage = payload.new;
-    if (!updatedMessage || !chatId) return;
-    
+    if (!updatedMessage || !chatId || !mountedRef.current) return;
+
     // Check if this message is for the current chat
     if (updatedMessage.chat_id !== chatId) {
-      console.warn(`Received message update for different chat: ${updatedMessage.chat_id} (current: ${chatId})`);
+      console.warn(
+        `Received message update for different chat: ${updatedMessage.chat_id} (current: ${chatId})`,
+      );
       return;
     }
-    
-    queryClient.setQueryData(['messages', chatId], (oldData: InfiniteData<Message[]> | undefined) => {
-       if (!oldData) return oldData;
-       return {
-         ...oldData,
-         pages: oldData.pages.map((page) => 
-           page.map((msg: Message) => {
-             if (msg.id === updatedMessage.id) {
-               // Merge new data with existing message to preserve reply_to data
-               return {
-                 ...msg,
-                 ...updatedMessage,
-                 // Preserve reply_to data from the existing message
-                 reply_to: msg.reply_to,
-                 reply_to_id: updatedMessage.reply_to_id || msg.reply_to_id
-               } as unknown as Message;
-             }
-             return msg;
-           })
-         )
-       };
-    });
+
+    queryClient.setQueryData(
+      ['messages', chatId],
+      (oldData: InfiniteData<Message[]> | undefined) => {
+        if (!oldData || !mountedRef.current) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) =>
+            page.map((msg: Message) => {
+              if (msg.id === updatedMessage.id) {
+                // Merge new data with existing message to preserve reply_to data
+                return {
+                  ...msg,
+                  ...updatedMessage,
+                  // Preserve reply_to data from the existing message
+                  reply_to: msg.reply_to,
+                  reply_to_id: updatedMessage.reply_to_id || msg.reply_to_id,
+                } as unknown as Message;
+              }
+              return msg;
+            }),
+          ),
+        };
+      },
+    );
   };
 
   const handleMessageDelete = (payload: RealtimePayload<MessagePayload>) => {
@@ -311,40 +379,45 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
 
     const deletedId = payload.old?.id;
     const deletedChatId = payload.old?.chat_id;
-    
-    if (!deletedId || !chatId) return;
-    
+
+    if (!deletedId || !chatId || !mountedRef.current) return;
+
     // Check if this message is for the current chat
     if (deletedChatId && deletedChatId !== chatId) {
-      console.warn(`Received message delete for different chat: ${deletedChatId} (current: ${chatId})`);
+      console.warn(
+        `Received message delete for different chat: ${deletedChatId} (current: ${chatId})`,
+      );
       return;
     }
-    
-    queryClient.setQueryData(['messages', chatId], (oldData: InfiniteData<Message[]> | undefined) => {
-      if (!oldData) {
-        return oldData;
-      }
-      
-      const newData = {
-        ...oldData,
-        pages: oldData.pages.map((page) => {
-          const filteredPage = page.filter((m) => m.id !== deletedId);
-          return filteredPage;
-        }),
-      };
-      
-      return newData;
-    });
-    
+
+    queryClient.setQueryData(
+      ['messages', chatId],
+      (oldData: InfiniteData<Message[]> | undefined) => {
+        if (!oldData || !mountedRef.current) {
+          return oldData;
+        }
+
+        const newData = {
+          ...oldData,
+          pages: oldData.pages.map((page) => {
+            const filteredPage = page.filter((m) => m.id !== deletedId);
+            return filteredPage;
+          }),
+        };
+
+        return newData;
+      },
+    );
+
     // Also update the chats cache to reflect the latest message change
     queryClient.setQueryData(['chats'], (oldChats: FullChat[] | undefined) => {
-      if (!oldChats) return oldChats;
-      
+      if (!oldChats || !mountedRef.current) return oldChats;
+
       return oldChats.map((chat) => {
         if (chat.id !== chatId) return chat;
-        
+
         const updatedMessages = chat.messages?.filter((m: Message) => m.id !== deletedId) || [];
-        
+
         return {
           ...chat,
           messages: updatedMessages,
@@ -354,27 +427,21 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
   };
 
   useEffect(() => {
+    // Clean up existing channel if no chatId or user
     if (!chatId || !user?.id) {
-      // Clean up existing channel if no chatId or user
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      cleanupChannel();
       return;
     }
 
     // Clean up previous channel before creating new one
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
+    cleanupChannel();
 
     // Create new channel with chat-specific filtering
     const channel = supabase.channel(`chat-${chatId}`, {
-      config: { 
-        presence: { 
-          key: `${user.id}-${chatId}` 
-        } 
+      config: {
+        presence: {
+          key: `${user.id}-${chatId}`,
+        },
       },
     });
 
@@ -382,39 +449,41 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
     channel
       .on(
         'postgres_changes',
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
+        {
+          event: 'INSERT',
+          schema: 'public',
           table: 'messages',
-          filter: `chat_id=eq.${chatId}` // Server-side filtering - CRITICAL for security and performance
+          filter: `chat_id=eq.${chatId}`, // Server-side filtering - CRITICAL for security and performance
         },
-        handleMessageInsert
+        handleMessageInsert,
       )
       .on(
         'postgres_changes',
-        { 
-          event: 'UPDATE', 
-          schema: 'public', 
+        {
+          event: 'UPDATE',
+          schema: 'public',
           table: 'messages',
-          filter: `chat_id=eq.${chatId}` // Server-side filtering
+          filter: `chat_id=eq.${chatId}`, // Server-side filtering
         },
-        handleMessageUpdate
+        handleMessageUpdate,
       )
       .on(
         'postgres_changes',
-        { 
-          event: 'DELETE', 
-          schema: 'public', 
+        {
+          event: 'DELETE',
+          schema: 'public',
           table: 'messages',
-          filter: `chat_id=eq.${chatId}` // Server-side filtering
+          filter: `chat_id=eq.${chatId}`, // Server-side filtering
         },
-        handleMessageDelete
+        handleMessageDelete,
       )
       .subscribe(async (status: string) => {
+        if (!mountedRef.current) return;
+
         if (status === 'SUBSCRIBED') {
           console.log(`Subscribed to chat ${chatId} realtime updates`);
         }
-        
+
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.warn(`Chat ${chatId} realtime subscription closed:`, status);
         }
@@ -424,18 +493,14 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
 
     // CRITICAL: Proper cleanup function
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-        console.log(`Unsubscribed from chat ${chatId} realtime updates`);
-      }
+      cleanupChannel();
     };
-  });
+  }, [chatId, user?.id, cleanupChannel]);
 
   // Throttled typing indicator function
   const sendTypingIndicator = createThrottle((isTyping: boolean) => {
-    if (!chatId || !channelRef.current || !user?.id) return;
-    
+    if (!chatId || !channelRef.current || !user?.id || !mountedRef.current) return;
+
     channelRef.current.track({
       user_id: user.id,
       chat_id: chatId,

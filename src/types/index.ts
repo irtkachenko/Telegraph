@@ -1,4 +1,4 @@
-import { Database } from './supabase';
+import type { Database } from './supabase';
 
 // Define Attachment interface inline to avoid circular import
 export interface Attachment {

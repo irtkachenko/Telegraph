@@ -1,8 +1,8 @@
 'use client';
 
-import { memo } from 'react';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { memo } from 'react';
 
 function NewChatButtonBase() {
   const router = useRouter();

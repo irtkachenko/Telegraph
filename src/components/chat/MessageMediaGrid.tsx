@@ -3,10 +3,10 @@
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { isMediaType, storageConfig } from '@/config/storage.config';
+import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
-import { useStorageUrl } from '@/hooks/useStorageUrl';
-import { isMediaType, storageConfig } from '@/config/storage.config';
 import ImageModal from './ImageModal';
 
 interface MessageMediaGridProps {
@@ -52,15 +52,15 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
           try {
             // Extract bucket and path from URL if it's a Supabase storage URL
-            const urlMatch = item.url.match(/\/storage\/v1\/object\/public\/([^\/]+)\/(.+)/);
+            const urlMatch = item.url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
             if (urlMatch) {
               const [, bucket, path] = urlMatch;
               const signedUrl = await getUrl(bucket, decodeURIComponent(path), {
-                expiresIn: storageConfig.defaultSignedUrlExpiry // Use config default
+                expiresIn: storageConfig.defaultSignedUrlExpiry, // Use config default
               });
               return { ...item, processedUrl: signedUrl };
             }
-            
+
             // If not a Supabase storage URL, use as-is
             return { ...item, processedUrl: item.url };
           } catch (error) {
@@ -68,7 +68,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
             // Fallback to original URL
             return { ...item, processedUrl: item.url };
           }
-        })
+        }),
       );
 
       setProcessedItems(processed);
@@ -85,28 +85,31 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     setFailedUrls((prev) => new Set(prev).add(url));
   };
 
-  const activeMedia = processedItems.filter((item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url));
+  const activeMedia = processedItems.filter(
+    (item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url),
+  );
   const count = processedItems.length;
 
   const handleMediaClick = (index: number) => {
     const clickedItem = processedItems[index];
-    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url)) return;
+    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url))
+      return;
     const activeIndex = activeMedia.findIndex((m) => m.id === clickedItem.id);
     if (activeIndex !== -1) setSelectedIndex(activeIndex);
   };
 
-  const modalImages = activeMedia.filter(item => isMediaType(item.type));
+  const modalImages = activeMedia.filter((item) => isMediaType(item.type));
 
   const renderItem = (item: AttachmentWithUrl, index: number, isLarge = false) => {
     const itemUrl = item.processedUrl || item.url;
     const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
 
     return (
-      <div 
+      <div
         key={item.id}
         className={cn(
-          "relative overflow-hidden group bg-neutral-200 dark:bg-neutral-800",
-          isLarge ? "col-span-2 aspect-video" : "aspect-square"
+          'relative overflow-hidden group bg-neutral-200 dark:bg-neutral-800',
+          isLarge ? 'col-span-2 aspect-video' : 'aspect-square',
         )}
       >
         {isFailed ? (
@@ -149,45 +152,58 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
   return (
     <>
-      <div className={cn(
-        "grid gap-1 overflow-hidden rounded-2xl w-[400px] max-w-full max-sm:w-[280px]",
-        count === 1 ? "grid-cols-1" : "grid-cols-2"
-      )}>
+      <div
+        className={cn(
+          'grid gap-1 overflow-hidden rounded-2xl w-[400px] max-w-full max-sm:w-[280px]',
+          count === 1 ? 'grid-cols-1' : 'grid-cols-2',
+        )}
+      >
         {count === 1 && (
-          <div 
+          <div
             className="relative overflow-hidden bg-neutral-200 dark:bg-neutral-800 rounded-2xl"
-            style={{ 
-              aspectRatio: processedItems[0].metadata?.width && processedItems[0].metadata?.height 
-                ? `${processedItems[0].metadata.width}/${processedItems[0].metadata.height}` 
-                : '16/10',
-              maxHeight: '500px'
+            style={{
+              aspectRatio:
+                processedItems[0].metadata?.width && processedItems[0].metadata?.height
+                  ? `${processedItems[0].metadata.width}/${processedItems[0].metadata.height}`
+                  : '16/10',
+              maxHeight: '500px',
             }}
           >
-             {processedItems[0].is_deleted || failedUrls.has(processedItems[0].processedUrl || processedItems[0].url) ? (
-               <MediaPlaceholder reason="error" />
-             ) : (
-               <button type="button" onClick={() => handleMediaClick(0)} className="w-full h-full relative block">
-                 {processedItems[0].type === 'video' ? (
-                    <video src={processedItems[0].processedUrl || processedItems[0].url} className="w-full h-full object-contain bg-black">
-                      <track kind="captions" />
-                    </video>
-                 ) : (
-                    <Image 
-                      src={processedItems[0].processedUrl || processedItems[0].url} 
-                      alt="" 
-                      fill 
-                      className="object-contain bg-neutral-900/10" 
-                      unoptimized 
-                      onError={() => handleImageError(processedItems[0].processedUrl || processedItems[0].url)}
-                    />
-                 )}
-               </button>
-             )}
+            {processedItems[0].is_deleted ||
+            failedUrls.has(processedItems[0].processedUrl || processedItems[0].url) ? (
+              <MediaPlaceholder reason="error" />
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleMediaClick(0)}
+                className="w-full h-full relative block"
+              >
+                {processedItems[0].type === 'video' ? (
+                  <video
+                    src={processedItems[0].processedUrl || processedItems[0].url}
+                    className="w-full h-full object-contain bg-black"
+                  >
+                    <track kind="captions" />
+                  </video>
+                ) : (
+                  <Image
+                    src={processedItems[0].processedUrl || processedItems[0].url}
+                    alt=""
+                    fill
+                    className="object-contain bg-neutral-900/10"
+                    unoptimized
+                    onError={() =>
+                      handleImageError(processedItems[0].processedUrl || processedItems[0].url)
+                    }
+                  />
+                )}
+              </button>
+            )}
           </div>
         )}
 
         {count === 2 && processedItems.map((item, i) => renderItem(item, i))}
-        
+
         {count === 3 && (
           <>
             {renderItem(processedItems[0], 0, true)}

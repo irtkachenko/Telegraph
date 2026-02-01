@@ -1,8 +1,8 @@
 'use client';
 
-import { Component, ErrorInfo, ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import { AlertCircle, RotateCcw } from 'lucide-react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   children: ReactNode;
@@ -39,15 +39,11 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               We encountered an unexpected error. Our team has been notified.
             </p>
             <div className="flex gap-2 mt-4">
-              <Button 
-                onClick={() => window.location.reload()} 
-                variant="outline"
-                className="gap-2"
-              >
+              <Button onClick={() => window.location.reload()} variant="outline" className="gap-2">
                 <RotateCcw size={16} />
                 Reload Page
               </Button>
-              <Button 
+              <Button
                 onClick={() => this.setState({ hasError: false })}
                 className="gap-2 bg-white text-black hover:bg-zinc-200"
               >

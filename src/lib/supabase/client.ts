@@ -3,7 +3,7 @@
 import { createBrowserClient } from '@supabase/ssr';
 import { toast } from 'sonner';
 
-let client: any;
+let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
   // Only create singleton on client-side to prevent SSR security risks
@@ -32,10 +32,10 @@ export function createClient() {
             const text = await response.clone().text();
             if (text) {
               const errorBody = JSON.parse(text);
-              errorMessage = 
-                errorBody?.message || 
-                errorBody?.error_description || 
-                errorBody?.msg || 
+              errorMessage =
+                errorBody?.message ||
+                errorBody?.error_description ||
+                errorBody?.msg ||
                 errorMessage;
             }
           } catch {

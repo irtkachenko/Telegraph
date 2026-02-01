@@ -2,8 +2,8 @@
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { useState, useEffect, useRef } from 'react';
-import { toast, Toaster } from 'sonner';
+import { useEffect, useRef, useState } from 'react';
+import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
 
@@ -13,14 +13,19 @@ import { queryClient } from '@/lib/query-client';
  */
 function RenderGuard({ children }: { children: React.ReactNode }) {
   const renderCount = useRef(0);
-  const startTime = useRef(Date.now());
+  const startTime = useRef<number | null>(null);
 
   useEffect(() => {
+    // Initialize startTime on first render
+    if (startTime.current === null) {
+      startTime.current = Date.now();
+    }
+
     renderCount.current += 1;
     const now = Date.now();
 
     // Скидаємо лічильник кожні 5 секунд
-    if (now - startTime.current > 5000) {
+    if (startTime.current && now - startTime.current > 5000) {
       renderCount.current = 1;
       startTime.current = now;
       return;
@@ -28,16 +33,16 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
 
     // Якщо рендерів занадто багато (більше 30 за 5 сек) — це "петля"
     if (renderCount.current > 30) {
-      console.error("⛔ [RenderGuard] Detected an infinite loop.");
-      
-      toast.error("Критична помилка клієнта", {
-        description: "Виявлено вічний цикл. Повертаємось на головну...",
+      console.error('⛔ [RenderGuard] Detected an infinite loop.');
+
+      toast.error('Критична помилка клієнта', {
+        description: 'Виявлено вічний цикл. Повертаємось на головну...',
         duration: 5000,
       });
 
       // Робимо жорсткий редірект, щоб розірвати цикл
       setTimeout(() => {
-        window.location.replace('/'); 
+        window.location.replace('/');
       }, 1500);
     }
   }); // Масив залежностей порожній (відсутній), щоб спрацьовувати на кожен рендер
@@ -49,17 +54,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalErrorBoundary>
-        <RenderGuard>
-          {children}
-        </RenderGuard>
-        <Toaster 
-          position="top-right" 
-          richColors 
-          closeButton 
+        <RenderGuard>{children}</RenderGuard>
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
           expand={true}
           visibleToasts={3}
           toastOptions={{
-            style: { zIndex: 9999 }
+            style: { zIndex: 9999 },
           }}
         />
       </GlobalErrorBoundary>

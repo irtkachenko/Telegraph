@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { 
-  useInfiniteQuery, 
-  useMutation, 
-  useQuery, 
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
   useQueryClient,
-  type InfiniteData
 } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { type VirtuosoHandle } from 'react-virtuoso';
 
 // Залишаємо тільки ОДИН варіант авторизації та клієнта
-import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore } from '@/store/usePresenceStore';
-import type { FullChat, Message, User, Attachment } from '@/types';
+import type { Attachment, FullChat, Message, User } from '@/types';
 
 // 1. Отримання чатів
 export function useChats() {
@@ -52,7 +53,7 @@ export function useChats() {
 
       // Use data directly since it's already in snake_case format
       const normalizedChats = data as FullChat[];
-      
+
       // Сортуємо за датою останнього повідомлення (Bubble to top)
       return normalizedChats.sort((a: FullChat, b: FullChat) => {
         const dateA = a.messages?.[0]?.created_at || a.created_at;
@@ -74,35 +75,35 @@ export function useMarkAsRead() {
 
       const { markAsReadAction } = await import('@/actions/chat-actions');
       const result = await markAsReadAction(chatId, messageId);
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to mark as read');
       }
-      
+
       return result;
     },
     onMutate: async ({ chatId, messageId }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['chats'] });
-      
+
       // Snapshot the previous value
       const previousChats = queryClient.getQueryData(['chats']);
 
       // Optimistically update the chats cache
-      queryClient.setQueryData(['chats'], (old: any) => {
+      queryClient.setQueryData(['chats'], (old: FullChat[] | undefined) => {
         if (!old) return old;
-        
-        return old.map((chat: any) => {
+
+        return old.map((chat: FullChat) => {
           if (chat.id === chatId) {
             const isCurrentUser = chat.user_id === user?.id;
             const readField = isCurrentUser ? 'user_last_read' : 'recipient_last_read';
-            
+
             return {
               ...chat,
               [readField]: {
                 id: messageId,
-                created_at: new Date().toISOString()
-              }
+                created_at: new Date().toISOString(),
+              },
             };
           }
           return chat;
@@ -147,9 +148,11 @@ export function useChatDetails(chatId: string) {
 
       // Use data directly since it's already in snake_case format
       const normalizedData = data as FullChat;
-      
+
       // Normalize participants for the UI
-      const participants = [normalizedData.user, normalizedData.recipient].filter(Boolean) as User[];
+      const participants = [normalizedData.user, normalizedData.recipient].filter(
+        Boolean,
+      ) as User[];
 
       return { ...normalizedData, participants } as FullChat;
     },
@@ -162,7 +165,13 @@ export function useMessages(chatId: string) {
   const markAsReadMutation = useMarkAsRead();
   const lastProcessedId = useRef<string | null>(null);
 
-  const query = useInfiniteQuery<Message[], Error, InfiniteData<Message[]>, string[], string | undefined>({
+  const query = useInfiniteQuery<
+    Message[],
+    Error,
+    InfiniteData<Message[]>,
+    string[],
+    string | undefined
+  >({
     queryKey: ['messages', chatId],
     queryFn: async ({ pageParam }: { pageParam?: string }) => {
       if (!chatId) return [];
@@ -181,15 +190,15 @@ export function useMessages(chatId: string) {
         .lt('created_at', pageParam || '9999-12-31');
 
       if (error) {
-        console.error("Помилка завантаження повідомлень:", error.message);
+        console.error('Помилка завантаження повідомлень:', error.message);
         throw error;
       }
       // Cast response data with proper typing for attachments
       const normalizedData = (data as unknown as Message[]).map((msg) => ({
         ...msg,
-        attachments: msg.attachments || []
+        attachments: msg.attachments || [],
       }));
-      
+
       // Повертаємо масив (нові повідомлення будуть в кінці масиву сторінки)
       return normalizedData.reverse();
     },
@@ -210,9 +219,9 @@ export function useMessages(chatId: string) {
     if (allMessages.length === 0 || !user?.id) return;
 
     const latestMessage = allMessages.reduce((prev: Message, current: Message) => {
-      return (new Date(current.created_at) > new Date(prev.created_at)) ? current : prev;
+      return new Date(current.created_at) > new Date(prev.created_at) ? current : prev;
     });
-    
+
     const msgId = latestMessage.id;
     const msgSenderId = latestMessage.sender_id;
 
@@ -274,9 +283,8 @@ export function usePresence() {
 export function useChatTyping(chatId: string) {
   const { user } = useSupabaseAuth();
   const [isTyping, setIsTyping] = useState<Record<string, boolean>>({});
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<{ track: (data: { isTyping: boolean }) => Promise<void>; remove: () => void } | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const managerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!chatId || !user?.id) return;
@@ -295,9 +303,9 @@ export function useChatTyping(chatId: string) {
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
         const typingMap: Record<string, boolean> = {};
-        
+
         for (const id in state) {
-          typingMap[id] = (state[id] as any[]).some((p) => p.isTyping);
+          typingMap[id] = (state[id] as Array<{ isTyping: boolean }>).some((p) => p.isTyping);
         }
         setIsTyping(typingMap);
       })
@@ -324,7 +332,7 @@ export function useChatTyping(chatId: string) {
 
       // Auto-cleanup timer: 3 seconds
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      
+
       if (typing) {
         timeoutRef.current = setTimeout(() => {
           channelRef.current?.track({ isTyping: false });
@@ -355,21 +363,23 @@ export function useEditMessage(chatId: string) {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
-      queryClient.setQueryData(['messages', chatId], (old: any) => {
+      queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          pages: old.pages.map((page: any) =>
-            page.map((msg: any) =>
-              msg.id === newEdit.messageId ? { ...msg, content: newEdit.content, updated_at: new Date().toISOString() } : msg
-            )
+          pages: old.pages.map((page: Message[]) =>
+            page.map((msg: Message) =>
+              msg.id === newEdit.messageId
+                ? { ...msg, content: newEdit.content, updated_at: new Date().toISOString() }
+                : msg,
+            ),
           ),
         };
       });
 
       return { previousData };
     },
-    onError: (error: any, _, context) => {
+    onError: (error: Error, _, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(['messages', chatId], context.previousData);
       }
@@ -381,24 +391,24 @@ export function useEditMessage(chatId: string) {
   });
 }
 
-// 5. Відправка повідомлення
+// 5. Відправка повідомлення з оптимістичними оновленнями для вкладень
 export function useSendMessage(chatId: string) {
   const { user } = useSupabaseAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ 
-      content, 
+    mutationFn: async ({
+      content,
       reply_to_id,
-      attachments 
-    }: { 
-      content: string; 
+      attachments,
+    }: {
+      content: string;
       reply_to_id?: string;
       attachments?: Attachment[];
     }) => {
       if (!user) throw new Error('Ви не авторизовані');
 
-      // 1. Вставляємо дані. 
+      // 1. Вставляємо дані.
       // Використовуємо .select() з явним вказанням зв'язку, щоб уникнути дублів ключів
       const { error, data } = await supabase
         .from('messages')
@@ -413,7 +423,7 @@ export function useSendMessage(chatId: string) {
         .single();
 
       if (error) {
-        console.error("Помилка відправки:", error.message);
+        console.error('Помилка відправки:', error.message);
         throw error;
       }
       return data;
@@ -427,41 +437,49 @@ export function useSendMessage(chatId: string) {
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
       // Знаходимо повідомлення, на яке відповідаємо (для UI)
-      const allMessages = (previousData as any)?.pages?.flat() || [];
-      const parentMessage = newMessage.reply_to_id 
-        ? allMessages.find((m: any) => m.id === newMessage.reply_to_id)
+      const allMessages = (previousData as InfiniteData<Message[]>)?.pages?.flat() || [];
+      const parentMessage = newMessage.reply_to_id
+        ? allMessages.find((m: Message) => m.id === newMessage.reply_to_id)
         : null;
 
+      // Створюємо оптимістичні вкладення з індикаторами завантаження
+      const optimisticAttachments = (newMessage.attachments || []).map((att) => ({
+        ...att,
+        uploading: true,
+        previewUrl: att.url || '',
+      }));
+
       // Створюємо "фейкове" повідомлення для миттєвого відображення
-      const optimisticMessage = {
+      const optimisticMessage: Message = {
         id: `temp-${Date.now()}`,
         content: newMessage.content,
         sender_id: user?.id,
         chat_id: chatId,
         created_at: new Date().toISOString(),
+        updated_at: null, // Add missing required property
         reply_to_id: newMessage.reply_to_id || null,
         reply_to: parentMessage,
-        attachments: newMessage.attachments || [],
-        is_optimistic: true 
-      };
+        attachments: optimisticAttachments,
+        is_optimistic: true,
+      } as Message;
 
       // Оновлюємо кеш React Query
-      queryClient.setQueryData(['messages', chatId], (old: any) => {
+      queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return { pages: [[optimisticMessage]], pageParams: [undefined] };
-        
+
         const newPages = [...old.pages];
         const lastPageIdx = newPages.length - 1;
-        
+
         // Додаємо в кінець останньої сторінки
         newPages[lastPageIdx] = [...newPages[lastPageIdx], optimisticMessage];
-  
+
         return { ...old, pages: newPages };
       });
 
       // --- ОПТИМІСТИЧНЕ ОНОВЛЕННЯ СПИСКУ ЧАТІВ (Bubble to top) ---
-      queryClient.setQueryData(['chats'], (old: any) => {
+      queryClient.setQueryData(['chats'], (old: FullChat[] | undefined) => {
         if (!old) return old;
-        const chatIndex = old.findIndex((c: any) => c.id === chatId);
+        const chatIndex = old.findIndex((c: FullChat) => c.id === chatId);
         if (chatIndex === -1) return old;
 
         const updatedChat = {
@@ -469,7 +487,7 @@ export function useSendMessage(chatId: string) {
           messages: [optimisticMessage], // Оновлюємо прев'ю
         };
 
-        const otherChats = old.filter((c: any) => c.id !== chatId);
+        const otherChats = old.filter((c: FullChat) => c.id !== chatId);
         return [updatedChat, ...otherChats]; // Ставимо на початок
       });
 
@@ -486,35 +504,36 @@ export function useSendMessage(chatId: string) {
 
     onSuccess: (savedMessage) => {
       // Replace temp message with real message, but be more careful about duplicates
-      queryClient.setQueryData(['messages', chatId], (old: any) => {
+      queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;
-        
+
         // Check if the real message already exists (might have been added by real-time)
-        const alreadyExists = old.pages.some((page: any[]) =>
-          page.some((msg: any) => msg.id === savedMessage.id)
+        const alreadyExists = old.pages.some((page: Message[]) =>
+          page.some((msg: Message) => msg.id === savedMessage.id),
         );
-        
+
         if (alreadyExists) {
           // If it already exists, just remove any temp messages with same content
           return {
             ...old,
-            pages: old.pages.map((page: any[]) =>
-              page.filter((msg: any) => 
-                !(msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content)
-              )
+            pages: old.pages.map((page: Message[]) =>
+              page.filter(
+                (msg: Message) =>
+                  !(msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content),
+              ),
             ),
           };
         }
-        
+
         // Otherwise, replace temp message with real message
         return {
           ...old,
-          pages: old.pages.map((page: any[]) =>
-            page.map((msg) => 
-              msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content 
-                ? savedMessage 
-                : msg
-            )
+          pages: old.pages.map((page: Message[]) =>
+            page.map((msg: Message) =>
+              msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content
+                ? savedMessage
+                : msg,
+            ),
           ),
         };
       });
@@ -523,7 +542,7 @@ export function useSendMessage(chatId: string) {
     onSettled: () => {
       // Фінальна синхронізація (опціонально)
       // queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
-    }
+    },
   });
 }
 
@@ -534,16 +553,16 @@ export function useDeleteMessage(chatId: string) {
   return useMutation({
     mutationFn: async (messageId: string) => {
       console.log('Deleting message:', messageId, 'Current user:', user?.id, 'Chat ID:', chatId);
-      
+
       // First, let's check if the message exists and belongs to the user
       const { data: messageCheck, error: checkError } = await supabase
         .from('messages')
         .select('id, sender_id, chat_id')
         .eq('id', messageId)
         .single();
-      
+
       console.log('Message ownership check:', { messageCheck, checkError });
-      
+
       const { data, error } = await supabase
         .from('messages')
         .delete()
@@ -557,7 +576,7 @@ export function useDeleteMessage(chatId: string) {
         console.error('Supabase delete error:', error);
         throw error;
       }
-      
+
       // Success - return the deleted data (can be null if no rows returned)
       return data;
     },
@@ -566,20 +585,20 @@ export function useDeleteMessage(chatId: string) {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
-      queryClient.setQueryData(['messages', chatId], (old: any) => {
+      queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          pages: old.pages.map((page: any) =>
+          pages: old.pages.map((page: Message[]) =>
             // Використовуємо messageId з аргументів мутації
-            page.filter((msg: any) => msg.id !== messageId)
+            page.filter((msg: Message) => msg.id !== messageId),
           ),
         };
       });
 
       return { previousData };
     },
-    onError: (error: any, messageId, context) => {
+    onError: (error: Error, messageId, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(['messages', chatId], context.previousData);
       }
@@ -601,10 +620,7 @@ export function useDeleteChat() {
 
   return useMutation({
     mutationFn: async (chatId: string) => {
-      const { error } = await supabase
-        .from('chats')
-        .delete()
-        .eq('id', chatId);
+      const { error } = await supabase.from('chats').delete().eq('id', chatId);
 
       if (error) throw error;
       return chatId;
@@ -616,23 +632,22 @@ export function useDeleteChat() {
       queryClient.removeQueries({ queryKey: ['messages', chatId] });
 
       // 2. Оновлюємо список чатів локально (оптимістично)
-      queryClient.setQueryData(['chats'], (old: any) => {
+      queryClient.setQueryData(['chats'], (old: FullChat[] | undefined) => {
         if (!old) return old;
-        return old.filter((chat: any) => chat.id !== chatId);
+        return old.filter((chat: FullChat) => chat.id !== chatId);
       });
 
       // 3. Виводимо сповіщення
       toast.success('Чат видалено');
 
       // 4. Редірект на головну сторінку месенджера
-      router.push('/chat'); 
+      router.push('/chat');
     },
     onError: (error: Error) => {
       toast.error(`Не вдалося видалити чат: ${error.message}`);
-    }
+    },
   });
 }
-
 
 export function useUpdateLastSeen() {
   const { user } = useSupabaseAuth();
@@ -652,7 +667,7 @@ export function useUpdateLastSeen() {
 }
 
 export function useScrollToMessage(
-  virtuosoRef: React.RefObject<any>,
+  virtuosoRef: React.RefObject<VirtuosoHandle | null>,
   messages: Message[],
   fetchPreviousPage: () => void,
   hasPreviousPage: boolean,
@@ -662,16 +677,17 @@ export function useScrollToMessage(
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const queryClient = useQueryClient();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Monitor messages array changes and retry scrolling if we have a pending target
   useEffect(() => {
     if (pendingScrollTarget && !isFetchingHistory) {
       const index = messages.findIndex((m: Message) => m.id === pendingScrollTarget);
-      
+
       if (index !== -1) {
         // Message found, scroll to it
-        setTimeout(() => {
-          virtuosoRef.current?.scrollToIndex({
+        const scrollTimeout = setTimeout(() => {
+          virtuosoRef.current?.scrollToIndex?.({
             index,
             behavior: 'smooth',
             align: 'center',
@@ -680,24 +696,39 @@ export function useScrollToMessage(
           setTimeout(() => setHighlightedId(null), 3000);
           setPendingScrollTarget(null); // Clear pending target
         }, 100);
+
+        return () => clearTimeout(scrollTimeout);
       }
     }
   }, [messages, pendingScrollTarget, isFetchingHistory, virtuosoRef]);
 
+  // Cleanup function to abort pending operations
+  const cancelPendingScroll = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setPendingScrollTarget(null);
+    setIsFetchingHistory(false);
+  };
+
   const scrollToMessage = async (
-    messageId: string, 
-    options?: { align?: 'start' | 'center' | 'end'; behavior?: 'smooth' | 'auto' }
+    messageId: string,
+    options?: { align?: 'start' | 'center' | 'end'; behavior?: 'smooth' | 'auto' },
   ) => {
-    const maxPagesToFetch = 10;
-    let pagesFetched = 0;
-    
-    const tryScroll = (currentMessages: Message[]) => {
+    // Cancel any existing scroll operations
+    cancelPendingScroll();
+
+    const maxPagesToFetch = 8; // Reduced from 10 for better performance
+    const fetchDelay = 200; // Throttle delay between fetches to avoid rate limits
+
+    const tryScroll = (currentMessages: Message[]): boolean => {
       const index = currentMessages.findIndex((m: Message) => m.id === messageId);
-      
+
       if (index !== -1) {
         // Message found, scroll to it with proper timing
-        setTimeout(() => {
-          virtuosoRef.current?.scrollToIndex({
+        const scrollTimeout = setTimeout(() => {
+          virtuosoRef.current?.scrollToIndex?.({
             index,
             behavior: options?.behavior || 'smooth',
             align: options?.align || 'center',
@@ -705,7 +736,7 @@ export function useScrollToMessage(
           setHighlightedId(messageId);
           setTimeout(() => setHighlightedId(null), 3000);
         }, 100);
-        
+
         return true;
       }
       return false;
@@ -716,67 +747,103 @@ export function useScrollToMessage(
       return;
     }
 
-    // Message not found, try to fetch previous pages
+    // Message not found, check if we can fetch more
     if (!hasPreviousPage) {
       toast.error('Message not found in chat history');
       return;
     }
 
+    // Create new abort controller for this operation
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
     toast.info('Loading chat history...');
     setPendingScrollTarget(messageId);
     setIsFetchingHistory(true);
-    
-    // Fetch loop with proper TanStack Query Promise handling
-    const fetchLoop = async () => {
-      try {
-        while (pagesFetched < maxPagesToFetch) {
-          // Check if we should continue fetching by getting current state
-          const currentData = queryClient.getQueryData(['messages', chatId]) as any;
-          const hasNextPage = currentData?.hasPreviousPage;
-          
-          if (!hasNextPage) {
-            break; // No more pages to fetch
-          }
-          
-          pagesFetched++;
-          
-          // Await the actual Promise from TanStack Query
-          await fetchPreviousPage();
-          
-          // Small delay to ensure state is updated
-          await new Promise(resolve => setTimeout(resolve, 10));
-          
-          // Get fresh data after fetch
-          const freshData = queryClient.getQueryData(['messages', chatId]) as any;
-          const freshMessages = freshData?.pages?.flat() || [];
-          
-          // Try to scroll with fresh messages
-          const scrolled = tryScroll(freshMessages);
-          if (scrolled) {
-            break; // Message found and scrolled, stop fetching
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching chat history:', error);
-        toast.error('Failed to load chat history');
-      } finally {
-        setIsFetchingHistory(false);
-        
-        // Final check if message was never found
-        if (pendingScrollTarget) {
-          if (pagesFetched >= maxPagesToFetch) {
-            toast.error('Message not found after loading history');
-          } else {
-            toast.error('Message not found in available history');
-          }
+
+    // Recursive fetch function with proper error handling and rate limiting
+    const fetchNextPage = async (pagesFetched: number = 0): Promise<void> => {
+      // Check if operation was aborted
+      if (signal.aborted) {
+        console.log('Scroll operation aborted');
+        return;
+      }
+
+      // Check if we've reached the limit
+      if (pagesFetched >= maxPagesToFetch) {
+        if (!signal.aborted) {
+          toast.error('Message not found after loading maximum history');
           setPendingScrollTarget(null);
         }
+        setIsFetchingHistory(false);
+        return;
+      }
+
+      try {
+        // Check if we still have more pages by getting current state
+        const currentData = queryClient.getQueryData(['messages', chatId]) as { pages: Message[]; pageParams: unknown[]; hasPreviousPage?: boolean } | undefined;
+        const hasNextPage = currentData?.hasPreviousPage;
+
+        if (!hasNextPage) {
+          if (!signal.aborted) {
+            toast.error('Message not found in available history');
+            setPendingScrollTarget(null);
+          }
+          setIsFetchingHistory(false);
+          return;
+        }
+
+        // Fetch the next page with proper Promise handling
+        await fetchPreviousPage();
+
+        // Check if operation was aborted during fetch
+        if (signal.aborted) {
+          setIsFetchingHistory(false);
+          return;
+        }
+
+        // Add delay to prevent rate limiting and allow React state to update
+        await new Promise((resolve) => setTimeout(resolve, fetchDelay));
+
+        // Get fresh data after fetch
+        const freshData = queryClient.getQueryData(['messages', chatId]) as { pages: Message[]; pageParams: unknown[] } | undefined;
+        const freshMessages = freshData?.pages?.flat() || [];
+
+        // Try to scroll with fresh messages
+        const scrolled = tryScroll(freshMessages);
+        if (scrolled) {
+          setPendingScrollTarget(null);
+          setIsFetchingHistory(false);
+          return;
+        }
+
+        // Continue fetching recursively
+        await fetchNextPage(pagesFetched + 1);
+      } catch (error) {
+        if (!signal.aborted) {
+          console.error('Error fetching chat history:', error);
+          toast.error('Failed to load chat history');
+          setPendingScrollTarget(null);
+        }
+        setIsFetchingHistory(false);
       }
     };
 
-    // Start the fetch loop without blocking
-    fetchLoop().catch(console.error);
+    // Start the recursive fetch without blocking
+    fetchNextPage().catch((error) => {
+      if (!signal.aborted) {
+        console.error('Recursive fetch failed:', error);
+      }
+      setIsFetchingHistory(false);
+    });
   };
 
-  return { scrollToMessage, highlightedId };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancelPendingScroll();
+    };
+  }, []);
+
+  return { scrollToMessage, highlightedId, cancelPendingScroll };
 }

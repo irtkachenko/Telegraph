@@ -1,8 +1,7 @@
 'use client';
 
-import { memo } from 'react';
 import { Loader2, User as UserIcon } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useSearchUsers } from '@/hooks/useChatHooks';
 import { ContactItem } from './ContactItem';
 

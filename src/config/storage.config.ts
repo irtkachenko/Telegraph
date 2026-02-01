@@ -40,25 +40,34 @@ export const storageConfig: StorageConfig = {
       maxFileSize: 50 * 1024 * 1024, // 50MB
       allowedExtensions: [
         // Images
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+        'jpg',
+        'jpeg',
+        'png',
+        'gif',
+        'webp',
+        'svg',
         // Videos
-        'mp4', 'mov', 'avi', 'webm', 'mkv',
+        'mp4',
+        'mov',
+        'avi',
+        'webm',
+        'mkv',
         // Documents
-        'pdf', 'doc', 'docx', 'txt', 'zip', 'rar', '7z'
-      ]
-    }
+        'pdf',
+        'doc',
+        'docx',
+        'txt',
+        'zip',
+        'rar',
+        '7z',
+      ],
+    },
   },
   fileTypes: {
     images: {
       extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
-      mimeTypes: [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'image/svg+xml'
-      ],
-      maxFileSize: 10 * 1024 * 1024 // 10MB
+      mimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+      maxFileSize: 10 * 1024 * 1024, // 10MB
     },
     videos: {
       extensions: ['mp4', 'mov', 'avi', 'webm', 'mkv'],
@@ -67,9 +76,9 @@ export const storageConfig: StorageConfig = {
         'video/quicktime',
         'video/x-msvideo',
         'video/webm',
-        'video/x-matroska'
+        'video/x-matroska',
       ],
-      maxFileSize: 50 * 1024 * 1024 // 50MB
+      maxFileSize: 50 * 1024 * 1024, // 50MB
     },
     documents: {
       extensions: ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', '7z'],
@@ -80,22 +89,33 @@ export const storageConfig: StorageConfig = {
         'text/plain',
         'application/zip',
         'application/x-rar-compressed',
-        'application/x-7z-compressed'
+        'application/x-7z-compressed',
       ],
-      maxFileSize: 20 * 1024 * 1024 // 20MB
-    }
+      maxFileSize: 20 * 1024 * 1024, // 20MB
+    },
   },
   staticAssetExtensions: [
-    'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp',
-    'ico', 'css', 'js', 'woff', 'woff2', 'ttf', 'eot'
+    'svg',
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'webp',
+    'ico',
+    'css',
+    'js',
+    'woff',
+    'woff2',
+    'ttf',
+    'eot',
   ],
-  defaultSignedUrlExpiry: 3600 // 1 hour in seconds
+  defaultSignedUrlExpiry: 3600, // 1 hour in seconds
 };
 
 // Helper functions for working with storage config
 
 export function getBucketConfig(bucketName: string) {
-  const bucket = Object.values(storageConfig.buckets).find(b => b.name === bucketName);
+  const bucket = Object.values(storageConfig.buckets).find((b) => b.name === bucketName);
   if (!bucket) {
     throw new Error(`Bucket configuration not found for: ${bucketName}`);
   }
@@ -113,13 +133,13 @@ export function isPrivateBucket(bucketName: string): boolean {
 
 export function getFileTypeCategory(extension: string): 'images' | 'videos' | 'documents' | null {
   const ext = extension.toLowerCase();
-  
+
   for (const [category, config] of Object.entries(storageConfig.fileTypes)) {
     if (config.extensions.includes(ext)) {
       return category as 'images' | 'videos' | 'documents';
     }
   }
-  
+
   return null;
 }
 
@@ -130,7 +150,7 @@ export function isMediaType(extension: string): boolean {
 
 export function isAllowedFileExtension(extension: string, bucketName?: string): boolean {
   const ext = extension.toLowerCase();
-  
+
   if (bucketName) {
     try {
       const bucket = getBucketConfig(bucketName);
@@ -139,20 +159,18 @@ export function isAllowedFileExtension(extension: string, bucketName?: string): 
       return false;
     }
   }
-  
+
   // Check all file types if no bucket specified
-  return Object.values(storageConfig.fileTypes).some(config => 
-    config.extensions.includes(ext)
-  );
+  return Object.values(storageConfig.fileTypes).some((config) => config.extensions.includes(ext));
 }
 
 export function getAllowedMimeTypes(category?: 'images' | 'videos' | 'documents'): string[] {
   if (category) {
     return storageConfig.fileTypes[category].mimeTypes;
   }
-  
+
   // Return all allowed MIME types
-  return Object.values(storageConfig.fileTypes).flatMap(config => config.mimeTypes);
+  return Object.values(storageConfig.fileTypes).flatMap((config) => config.mimeTypes);
 }
 
 export function getMaxFileSize(extension: string): number {
@@ -160,7 +178,7 @@ export function getMaxFileSize(extension: string): number {
   if (category) {
     return storageConfig.fileTypes[category].maxFileSize;
   }
-  
+
   // Default to 10MB if category not found
   return 10 * 1024 * 1024;
 }

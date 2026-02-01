@@ -35,9 +35,7 @@ export default function ComposerAddons({
       {editingMessage && (
         <div className="flex items-center gap-3 py-2 border-s-4 border-amber-500 px-3 bg-amber-500/5 rounded-e-lg relative group">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-amber-400">
-              Editing message
-            </p>
+            <p className="text-xs font-semibold text-amber-400">Editing message</p>
             <p className="text-sm text-gray-300 truncate">{editingMessage.content}</p>
           </div>
           <button

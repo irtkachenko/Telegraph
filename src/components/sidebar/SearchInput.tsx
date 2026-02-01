@@ -1,9 +1,8 @@
 'use client';
 
-import { memo } from 'react';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 function SearchInputBase() {
   const router = useRouter();

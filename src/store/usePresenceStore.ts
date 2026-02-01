@@ -1,9 +1,9 @@
 'use client';
 
-import { create } from 'zustand';
-import { supabase } from '@/lib/supabase/client';
-import { queryClient } from '@/lib/query-client';
 import type { User } from '@supabase/supabase-js';
+import { create } from 'zustand';
+import { queryClient } from '@/lib/query-client';
+import { supabase } from '@/lib/supabase/client';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -13,12 +13,15 @@ interface PresenceState {
 }
 
 interface PresenceManager {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   channel: any;
   userId: string | null;
   subscribers: number;
   heartbeatInterval: NodeJS.Timeout | null;
   reconnectAttempts: number;
   maxReconnectAttempts: number;
+  debounceTimer: NodeJS.Timeout | null;
+  pendingUsers: Set<string>;
 }
 
 // Global singleton manager for presence channel
@@ -27,6 +30,7 @@ let presenceManager: PresenceManager | null = null;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 2000; // 2 seconds
 const HEARTBEAT_INTERVAL = 1000 * 60 * 5; // 5 minutes
+const PRESENCE_DEBOUNCE_DELAY = 500; // 500ms debounce for presence updates
 
 function createPresenceManager(): PresenceManager {
   return {
@@ -36,6 +40,8 @@ function createPresenceManager(): PresenceManager {
     heartbeatInterval: null,
     reconnectAttempts: 0,
     maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+    debounceTimer: null,
+    pendingUsers: new Set(),
   };
 }
 
@@ -68,7 +74,34 @@ function stopHeartbeat(manager: PresenceManager): void {
   }
 }
 
-function setupChannel(manager: PresenceManager, userId: string, setOnlineUsers: (users: Set<string>) => void, setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void): void {
+function debouncedPresenceUpdate(
+  manager: PresenceManager,
+  setOnlineUsers: (users: Set<string>) => void,
+  newUsers: Set<string>,
+): void {
+  // Clear existing timer
+  if (manager.debounceTimer) {
+    clearTimeout(manager.debounceTimer);
+  }
+
+  // Add new users to pending set
+  newUsers.forEach((user) => manager.pendingUsers.add(user));
+
+  // Set new timer
+  manager.debounceTimer = setTimeout(() => {
+    // Apply the debounced update
+    setOnlineUsers(new Set(manager.pendingUsers));
+    manager.pendingUsers.clear();
+    manager.debounceTimer = null;
+  }, PRESENCE_DEBOUNCE_DELAY);
+}
+
+function setupChannel(
+  manager: PresenceManager,
+  userId: string,
+  setOnlineUsers: (users: Set<string>) => void,
+  setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void,
+): void {
   manager.channel = supabase.channel('db-global-updates', {
     config: { presence: { key: userId } },
   });
@@ -80,27 +113,20 @@ function setupChannel(manager: PresenceManager, userId: string, setOnlineUsers: 
       for (const key of Object.keys(state)) {
         onlineIds.add(key);
       }
-      setOnlineUsers(onlineIds);
+      // Use debounced update to prevent render storms
+      debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
     })
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'user' },
-      () => {
-        // Invalidate contacts queries when users change
-        queryClient.invalidateQueries({ queryKey: ['contacts'], exact: false });
-      },
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'chats' },
-      () => {
-        // Invalidate chats queries when chats change
-        queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
-      },
-    )
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user' }, () => {
+      // Invalidate contacts queries when users change
+      queryClient.invalidateQueries({ queryKey: ['contacts'], exact: false });
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
+      // Invalidate chats queries when chats change
+      queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
+    })
     .subscribe(async (status: string) => {
       console.log('Presence channel status:', status);
-      
+
       switch (status) {
         case 'SUBSCRIBED':
           setConnectionState('CONNECTED');
@@ -111,21 +137,23 @@ function setupChannel(manager: PresenceManager, userId: string, setOnlineUsers: 
           });
           startHeartbeat(manager);
           break;
-          
+
         case 'CLOSED':
         case 'CHANNEL_ERROR':
         case 'TIMED_OUT':
           setConnectionState('DISCONNECTED');
           await updateLastSeen();
           stopHeartbeat(manager);
-          
+
           // Attempt reconnection if we haven't exceeded max attempts
           if (manager.reconnectAttempts < manager.maxReconnectAttempts && manager.subscribers > 0) {
             manager.reconnectAttempts++;
             setConnectionState('RECONNECTING');
-            
+
             setTimeout(() => {
-              console.log(`Attempting to reconnect presence (${manager.reconnectAttempts}/${manager.maxReconnectAttempts})`);
+              console.log(
+                `Attempting to reconnect presence (${manager.reconnectAttempts}/${manager.maxReconnectAttempts})`,
+              );
               if (manager.channel && manager.subscribers > 0) {
                 setupChannel(manager, userId, setOnlineUsers, setConnectionState);
               }
@@ -142,6 +170,19 @@ export const usePresenceStore = create<PresenceState>((set) => ({
   connectionState: 'DISCONNECTED',
   setConnectionState: (state) => set({ connectionState: state }),
 }));
+
+// Optimized selectors to prevent unnecessary re-renders
+export const useOnlineUsers = () => usePresenceStore((state) => state.onlineUsers);
+export const useConnectionState = () => usePresenceStore((state) => state.connectionState);
+export const useIsUserOnline = (userId: string) => 
+  usePresenceStore((state) => state.onlineUsers.has(userId));
+export const useOnlineUserCount = () => 
+  usePresenceStore((state) => state.onlineUsers.size);
+
+export function usePresence() {
+  const onlineUsers = useOnlineUsers();
+  return { onlineUsers };
+}
 
 // Hook for managing presence subscription with singleton pattern
 export function usePresenceSubscription(user: User | null) {
@@ -173,7 +214,7 @@ export function usePresenceSubscription(user: User | null) {
       if (!presenceManager.channel && presenceManager.subscribers === 1) {
         console.log('Setting up presence channel for user:', user.id);
         setupChannel(presenceManager, user.id, setOnlineUsers, setConnectionState);
-        
+
         // Add global event listeners
         window.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('beforeunload', updateLastSeen);
@@ -181,7 +222,7 @@ export function usePresenceSubscription(user: User | null) {
 
       console.log(`Presence subscribers: ${presenceManager.subscribers}`);
     },
-    
+
     unsubscribe: () => {
       if (!presenceManager) return;
 
@@ -193,7 +234,7 @@ export function usePresenceSubscription(user: User | null) {
         cleanupPresence();
       }
     },
-    
+
     getConnectionState: () => {
       return usePresenceStore.getState().connectionState;
     },
@@ -205,26 +246,32 @@ function cleanupPresence(): void {
   if (!presenceManager) return;
 
   console.log('Cleaning up presence channel');
-  
+
+  // Clear debounce timer
+  if (presenceManager.debounceTimer) {
+    clearTimeout(presenceManager.debounceTimer);
+    presenceManager.debounceTimer = null;
+  }
+
   // Update last seen before disconnecting
   updateLastSeen();
-  
+
   // Stop heartbeat
   stopHeartbeat(presenceManager);
-  
+
   // Remove channel
   if (presenceManager.channel) {
     supabase.removeChannel(presenceManager.channel);
     presenceManager.channel = null;
   }
-  
+
   // Remove global event listeners
   window.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('beforeunload', updateLastSeen);
-  
+
   // Reset manager
   presenceManager = null;
-  
+
   // Update store state
   usePresenceStore.getState().setConnectionState('DISCONNECTED');
 }

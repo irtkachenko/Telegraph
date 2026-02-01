@@ -11,9 +11,10 @@ export function getSafeTimestamp(date: DateInput): number {
   if (!date) return 0;
   try {
     // Твоя фірмова логіка очистки рядка
-    const dateString = typeof date === 'string' && !date.includes('Z') && !date.includes('+') 
-      ? `${date.replace(' ', 'T')}Z` 
-      : date;
+    const dateString =
+      typeof date === 'string' && !date.includes('Z') && !date.includes('+')
+        ? `${date.replace(' ', 'T')}Z`
+        : date;
 
     const d = new Date(dateString);
     return Number.isNaN(d.getTime()) ? 0 : d.getTime();
@@ -29,7 +30,7 @@ export function formatMessageDate(date: DateInput) {
 
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return `Вчора, ${format(d, 'HH:mm')}`;
-  
+
   return format(d, 'd MMM, HH:mm', { locale: uk });
 }
 
@@ -40,6 +41,6 @@ export function formatRelativeTime(date: DateInput) {
 
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return 'Вчора';
-  
+
   return format(d, 'dd.MM.yy');
 }

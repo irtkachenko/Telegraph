@@ -1,8 +1,8 @@
 'use client';
 
-import { usePresenceStore } from '@/store/usePresenceStore';
-import { cn } from '@/lib/utils';
 import { memo } from 'react';
+import { cn } from '@/lib/utils';
+import { usePresenceStore } from '@/store/usePresenceStore';
 
 interface ConnectionIndicatorProps {
   className?: string;
@@ -19,28 +19,28 @@ function ConnectionIndicatorBase({ className, showText = false }: ConnectionIndi
           color: 'bg-green-500',
           textColor: 'text-green-700',
           text: 'Connected',
-          shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]'
+          shadow: 'shadow-[0_0_8px_rgba(34,197,94,0.5)]',
         };
       case 'RECONNECTING':
         return {
           color: 'bg-yellow-500',
           textColor: 'text-yellow-700',
           text: 'Reconnecting...',
-          shadow: 'shadow-[0_0_8px_rgba(234,179,8,0.5)]'
+          shadow: 'shadow-[0_0_8px_rgba(234,179,8,0.5)]',
         };
       case 'DISCONNECTED':
         return {
           color: 'bg-red-500',
           textColor: 'text-red-700',
           text: 'Disconnected',
-          shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+          shadow: 'shadow-[0_0_8px_rgba(239,68,68,0.5)]',
         };
       default:
         return {
           color: 'bg-gray-500',
           textColor: 'text-gray-700',
           text: 'Unknown',
-          shadow: ''
+          shadow: '',
         };
     }
   };
@@ -49,30 +49,28 @@ function ConnectionIndicatorBase({ className, showText = false }: ConnectionIndi
 
   if (!showText) {
     return (
-      <div 
+      <div
         className={cn(
-          "rounded-full border-2 border-black", 
+          'rounded-full border-2 border-black',
           stateInfo.color,
           stateInfo.shadow,
-          className
-        )} 
+          className,
+        )}
         title={stateInfo.text}
       />
     );
   }
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <div 
+    <div className={cn('flex items-center gap-2', className)}>
+      <div
         className={cn(
-          "w-2 h-2 rounded-full border border-black", 
+          'w-2 h-2 rounded-full border border-black',
           stateInfo.color,
-          stateInfo.shadow
-        )} 
+          stateInfo.shadow,
+        )}
       />
-      <span className={cn("text-xs font-medium", stateInfo.textColor)}>
-        {stateInfo.text}
-      </span>
+      <span className={cn('text-xs font-medium', stateInfo.textColor)}>{stateInfo.text}</span>
     </div>
   );
 }

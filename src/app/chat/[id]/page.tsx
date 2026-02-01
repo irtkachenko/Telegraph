@@ -6,10 +6,9 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import ChatInput from '@/components/chat/ChatInput';
 import MessageBubble from '@/components/chat/MessageBubble';
-import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   useChatDetails,
@@ -80,47 +79,52 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // --- ЛОГІКА ОНОВЛЕННЯ ГАЛОЧОК ---
   const recipientLastReadAt = (() => {
     if (!chat || !user) return null;
-    
+
     // Визначаємо, чий timestamp читання нас цікавить (співрозмовника)
     const isUserCreator = chat.user_id === user.id;
-    
+
     // Знайдемо повідомлення, яке було прочитано
     const readMessageId = isUserCreator ? chat.recipient_last_read_id : chat.user_last_read_id;
-    const readMessage = messages.find(m => m.id === readMessageId);
-    
+    const readMessage = messages.find((m) => m.id === readMessageId);
+
     return readMessage?.created_at || null;
   })();
 
   // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ ---
   const uniqueParticipants = (() => {
     const participants: User[] = [];
-    
+
     // Add current user
     if (user) {
       // Handle both Supabase Auth user and database user types
-      const authUser = user as any; // Cast to access auth user properties
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const authUser = user as any; // Temporary cast to access auth properties
       participants.push({
         id: user.id,
-        name: authUser.user_metadata?.name || authUser.name || user.email?.split('@')[0] || 'Unknown User',
+        name:
+          authUser.user_metadata?.name ||
+          authUser.name ||
+          user.email?.split('@')[0] ||
+          'Unknown User',
         email: user.email || '',
         email_verified: authUser.email_verified || null,
         image: authUser.user_metadata?.avatar_url || authUser.image || null,
-        last_seen: authUser.last_seen || null
+        last_seen: authUser.last_seen || null,
       });
     }
-    
+
     // Add chat participants from chat details
     if (chat?.participants) {
       chat.participants.forEach((participant: User) => {
-        if (!participants.find(p => p.id === participant.id)) {
+        if (!participants.find((p) => p.id === participant.id)) {
           participants.push(participant);
         }
       });
     }
-    
+
     // Add unique senders from messages (using joined user data)
     messages.forEach((message: Message) => {
-      if (message.sender_id && !participants.find(p => p.id === message.sender_id)) {
+      if (message.sender_id && !participants.find((p) => p.id === message.sender_id)) {
         // Use joined user data if available, otherwise create minimal user object
         if (message.user) {
           participants.push({
@@ -129,14 +133,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             email: '', // Required field, use empty string as fallback
             email_verified: null,
             image: message.user.image,
-            last_seen: null
+            last_seen: null,
           } as User);
         } else if (message.sender) {
           participants.push(message.sender);
         }
       }
     });
-    
+
     return participants;
   })();
 
@@ -190,7 +194,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 <span className="text-green-400">в мережі</span>
               ) : (
                 <span className="text-gray-500">
-                  {otherParticipant?.last_seen ? `був(ла) ${formatRelativeTime(otherParticipant.last_seen)}` : 'не в мережі'}
+                  {otherParticipant?.last_seen
+                    ? `був(ла) ${formatRelativeTime(otherParticipant.last_seen)}`
+                    : 'не в мережі'}
                 </span>
               )}
             </div>
@@ -206,7 +212,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               <span className="text-3xl">💬</span>
             </div>
             <h3 className="text-white font-semibold text-lg mb-1">Поки що порожньо</h3>
-            <p className="text-gray-500 text-sm max-w-[280px]">Напишіть щось, щоб розпочати бесіду!</p>
+            <p className="text-gray-500 text-sm max-w-[280px]">
+              Напишіть щось, щоб розпочати бесіду!
+            </p>
           </div>
         ) : (
           <Virtuoso
@@ -234,11 +242,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     !!chat?.recipient_last_read_id &&
                     // 3. Знайдемо повідомлення в масиві повідомлень
                     (() => {
-                      const readMessage = messages.find(m => m.id === chat.recipient_last_read_id);
-                      return readMessage ? 
-                        // 4. Порівнюємо час створення поточного повідомлення з часом прочитання
-                        new Date(message.created_at).getTime() <= new Date(readMessage.created_at).getTime() :
-                        false;
+                      const readMessage = messages.find(
+                        (m) => m.id === chat.recipient_last_read_id,
+                      );
+                      return readMessage
+                        ? // 4. Порівнюємо час створення поточного повідомлення з часом прочитання
+                          new Date(message.created_at).getTime() <=
+                            new Date(readMessage.created_at).getTime()
+                        : false;
                     })()
                   }
                   isEditing={editingMessage?.id === message.id}
@@ -305,7 +316,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               const wasEditing = !!editingMessage;
               setReplyingTo(null);
               setEditingMessage(null);
-              
+
               if (!wasEditing) {
                 requestAnimationFrame(() => {
                   virtuosoRef.current?.scrollToIndex({

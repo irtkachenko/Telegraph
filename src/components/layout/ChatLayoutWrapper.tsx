@@ -72,9 +72,7 @@ export default function ChatLayoutWrapper({ children, sidebar, user }: ChatLayou
             ${user ? 'w-80 opacity-100 visible' : 'w-0 opacity-0 invisible overflow-hidden border-none'}
           `}
         >
-          <div className="w-80 h-full overflow-hidden">
-            {sidebar}
-          </div>
+          <div className="w-80 h-full overflow-hidden">{sidebar}</div>
         </aside>
 
         <main className="flex-1 w-full min-w-0 relative z-0 transition-all duration-300">

@@ -1,10 +1,6 @@
 import { useState } from 'react';
+import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
 import { supabase } from '@/lib/supabase/client';
-import { 
-  isPrivateBucket, 
-  storageConfig, 
-  type StorageConfig 
-} from '@/config/storage.config';
 
 interface SignedUrlOptions {
   expiresIn?: number; // Default: from config
@@ -29,18 +25,16 @@ export function useStorageUrl(): UseStorageUrlReturn {
   const [error, setError] = useState<Error | null>(null);
 
   const getPublicUrl = async (
-    bucket: string, 
-    path: string, 
-    options?: SignedUrlOptions
+    bucket: string,
+    path: string,
+    options?: SignedUrlOptions,
   ): Promise<string> => {
     try {
-      const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(path, {
-          download: options?.download,
-          transform: options?.transform
-        });
-      
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path, {
+        download: options?.download,
+        transform: options?.transform,
+      });
+
       return data.publicUrl;
     } catch (err) {
       throw new Error(`Failed to get public URL for ${bucket}/${path}: ${err}`);
@@ -48,26 +42,26 @@ export function useStorageUrl(): UseStorageUrlReturn {
   };
 
   const getSignedUrl = async (
-    bucket: string, 
-    path: string, 
-    options?: SignedUrlOptions
+    bucket: string,
+    path: string,
+    options?: SignedUrlOptions,
   ): Promise<string> => {
     try {
       const { data, error: signedUrlError } = supabase.storage
         .from(bucket)
         .createSignedUrl(path, options?.expiresIn ?? 3600, {
           download: options?.download,
-          transform: options?.transform
+          transform: options?.transform,
         });
-      
+
       if (signedUrlError) {
         throw signedUrlError;
       }
-      
+
       if (!data?.signedUrl) {
         throw new Error('No signed URL returned from Supabase');
       }
-      
+
       return data.signedUrl;
     } catch (err) {
       throw new Error(`Failed to create signed URL for ${bucket}/${path}: ${err}`);
@@ -75,18 +69,18 @@ export function useStorageUrl(): UseStorageUrlReturn {
   };
 
   const getUrl = async (
-    bucket: string, 
-    path: string, 
-    options?: SignedUrlOptions
+    bucket: string,
+    path: string,
+    options?: SignedUrlOptions,
   ): Promise<string> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       if (isPrivateBucket(bucket)) {
         return await getSignedUrl(bucket, path, {
           expiresIn: options?.expiresIn ?? storageConfig.defaultSignedUrlExpiry,
-          ...options
+          ...options,
         });
       } else {
         return await getPublicUrl(bucket, path, options);
@@ -105,14 +99,14 @@ export function useStorageUrl(): UseStorageUrlReturn {
     getSignedUrl,
     getUrl,
     isLoading,
-    error
+    error,
   };
 }
 
 export async function getStorageUrl(
-  bucket: string, 
-  path: string, 
-  options?: SignedUrlOptions
+  bucket: string,
+  path: string,
+  options?: SignedUrlOptions,
 ): Promise<string> {
   try {
     if (isPrivateBucket(bucket)) {
@@ -120,26 +114,24 @@ export async function getStorageUrl(
         .from(bucket)
         .createSignedUrl(path, options?.expiresIn ?? storageConfig.defaultSignedUrlExpiry, {
           download: options?.download,
-          transform: options?.transform
+          transform: options?.transform,
         });
-      
+
       if (error) {
         throw error;
       }
-      
+
       if (!data?.signedUrl) {
         throw new Error('No signed URL returned from Supabase');
       }
-      
+
       return data.signedUrl;
     } else {
-      const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(path, {
-          download: options?.download,
-          transform: options?.transform
-        });
-      
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path, {
+        download: options?.download,
+        transform: options?.transform,
+      });
+
       return data.publicUrl;
     }
   } catch (err) {

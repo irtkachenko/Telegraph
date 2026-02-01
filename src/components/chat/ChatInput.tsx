@@ -2,12 +2,12 @@
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useAttachment } from '@/hooks/useAttachment';
-import { useSendMessage, useEditMessage } from '@/hooks/useChatHooks';
+import { useEditMessage, useSendMessage } from '@/hooks/useChatHooks';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
-import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
 import ComposerAddons from './ComposerAddons';
 
 interface ChatInputProps {
@@ -33,7 +33,7 @@ export default function ChatInput({
   const [content, setContent] = useState('');
   const { attachments, uploadFile, removeAttachment, clearAttachments, isUploading } =
     useAttachment(chatId);
-  
+
   // Використовуємо оновлений хук з Optimistic UI
   const sendMessage = useSendMessage(chatId);
   const editMessage = useEditMessage(chatId);
@@ -48,7 +48,6 @@ export default function ChatInput({
     } else {
       setContent('');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -56,23 +55,29 @@ export default function ChatInput({
   const queryClient = useQueryClient();
 
   // Автоматична висота textarea
-  useEffect(() => {
+  const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
-    content
     if (textarea) {
+      // eslint-disable-next-line react-hooks/immutability
       textarea.style.height = 'inherit';
       const scrollHeight = textarea.scrollHeight;
+      // eslint-disable-next-line react-hooks/immutability
       textarea.style.height = `${Math.min(scrollHeight, 200)}px`;
     }
-  }, [content]);
+  }, []);
+
+  useEffect(() => {
+    content;
+    adjustTextareaHeight();
+  }, [content, adjustTextareaHeight]);
 
   // Знаходимо повідомлення для реплаю в кеші
-  const replyToMessage =
-    !replyToId ? null :
-    queryClient.getQueryData<InfiniteData<Message[]>>([
-      'messages',
-      chatId,
-    ])?.pages?.flat().find((m) => m.id === replyToId) || null;
+  const replyToMessage = !replyToId
+    ? null
+    : queryClient
+        .getQueryData<InfiniteData<Message[]>>(['messages', chatId])
+        ?.pages?.flat()
+        .find((m) => m.id === replyToId) || null;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -90,7 +95,7 @@ export default function ChatInput({
     const attachmentsBackup = attachments
       .filter((a) => a.url && !a.error && !a.uploading)
       .map(({ id, type, url, metadata }) => ({ id, type, url, metadata }));
-    
+
     clearAttachments();
 
     try {
@@ -111,7 +116,7 @@ export default function ChatInput({
         // Clear reply state only after successful send
         if (onReplyCancel) onReplyCancel();
       }
-      
+
       if (onMessageSent) onMessageSent();
     } catch (error) {
       // Якщо впало — повертаємо текст назад, щоб юзер не втратив повідомлення
@@ -150,7 +155,7 @@ export default function ChatInput({
         onReplyCancel={onReplyCancel}
         editingMessage={editingMessage || null}
         onEditCancel={onEditCancel}
-        otherParticipantName="Співрозмовник" 
+        otherParticipantName="Співрозмовник"
       />
 
       <form onSubmit={handleSubmit} className="p-3 sm:p-4 flex gap-2 items-end">

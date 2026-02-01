@@ -40,30 +40,30 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
   }
 
   const handleNext = (e?: React.MouseEvent | KeyboardEvent) => {
-      // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
-      if (e && 'stopPropagation' in e) {
-        e.stopPropagation();
-      }
+    // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
+    if (e && 'stopPropagation' in e) {
+      e.stopPropagation();
+    }
 
-      if (currentIndex < images.length - 1) {
-        setDirection(1);
-        setCurrentIndex((prev) => prev + 1);
-        setHasError(false);
-      }
-    };
+    if (currentIndex < images.length - 1) {
+      setDirection(1);
+      setCurrentIndex((prev) => prev + 1);
+      setHasError(false);
+    }
+  };
 
   const handlePrev = (e?: React.MouseEvent | KeyboardEvent) => {
-      // Аналогічно тут
-      if (e && 'stopPropagation' in e) {
-        e.stopPropagation();
-      }
+    // Аналогічно тут
+    if (e && 'stopPropagation' in e) {
+      e.stopPropagation();
+    }
 
-      if (currentIndex > 0) {
-        setDirection(-1);
-        setCurrentIndex((prev) => prev - 1);
-        setHasError(false);
-      }
-    };
+    if (currentIndex > 0) {
+      setDirection(-1);
+      setCurrentIndex((prev) => prev - 1);
+      setHasError(false);
+    }
+  };
 
   // 3. Обробка клавіш та блокування скролу
   useEffect(() => {
@@ -197,8 +197,12 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
                       <AlertCircle className="w-8 h-8 text-red-500 absolute -bottom-1 -right-1" />
                     </div>
                     <div className="text-center">
-                      <p className="text-lg font-medium text-white/80 uppercase tracking-tight">Media not available</p>
-                      <p className="text-sm text-white/40 mt-1">The file has been deleted or expired</p>
+                      <p className="text-lg font-medium text-white/80 uppercase tracking-tight">
+                        Media not available
+                      </p>
+                      <p className="text-sm text-white/40 mt-1">
+                        The file has been deleted or expired
+                      </p>
                     </div>
                   </div>
                 )}

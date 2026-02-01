@@ -1,12 +1,10 @@
 'use client';
 
-import { memo } from 'react';
-
 import { MessageSquare, Trash2, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
-import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
+import { memo, useState } from 'react';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   ContextMenu,
@@ -16,8 +14,8 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useChats, useDeleteChat } from '@/hooks/useChatHooks';
-import { PresenceIndicator } from './PresenceIndicator';
 import { formatRelativeTime } from '@/lib/date-utils';
+import { PresenceIndicator } from './PresenceIndicator';
 
 function ChatListBase() {
   const { data: chats, isLoading } = useChats();
@@ -81,30 +79,33 @@ function ChatListBase() {
           const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
           const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
           const partnerImage = partner?.image;
-          
+
           // Debug logging to help identify missing partner data
           if (!partner) {
             console.warn('Chat missing partner data:', {
               chatId: chat.id,
               userId: chat.user_id,
               recipientId: chat.recipient_id,
-              currentUserId
+              currentUserId,
             });
           }
 
           const lastMessage = chat.messages?.[0];
-          
+
           // Determine which read field to check based on who the current user is
           const isCurrentUser = chat.user_id === currentUserId;
-          const readMessageId = isCurrentUser ? chat.user_last_read_id : chat.recipient_last_read_id;
-          
+          const readMessageId = isCurrentUser
+            ? chat.user_last_read_id
+            : chat.recipient_last_read_id;
+
           // Find the read message in the messages array to get its created_at timestamp
-          const readMessage = chat.messages?.find(m => m.id === readMessageId);
+          const readMessage = chat.messages?.find((m) => m.id === readMessageId);
           const readAt = readMessage?.created_at;
-          
-          const isUnread = lastMessage && 
-                          lastMessage.sender_id !== currentUserId && 
-                          (!readAt || new Date(lastMessage.created_at) > new Date(readAt));
+
+          const isUnread =
+            lastMessage &&
+            lastMessage.sender_id !== currentUserId &&
+            (!readAt || new Date(lastMessage.created_at) > new Date(readAt));
 
           return (
             <ContextMenu key={chat.id}>
@@ -128,10 +129,10 @@ function ChatListBase() {
                       ) : (
                         <User className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
                       )}
-                     </div>
-                    <PresenceIndicator 
-                      userId={partner?.id || ''} 
-                      className="absolute bottom-0 right-0 w-2.5 h-2.5" 
+                    </div>
+                    <PresenceIndicator
+                      userId={partner?.id || ''}
+                      className="absolute bottom-0 right-0 w-2.5 h-2.5"
                       showOffline={false}
                     />
                   </div>
@@ -153,7 +154,10 @@ function ChatListBase() {
                       <p className="text-[11px] text-gray-500 truncate flex-1">
                         {lastMessage?.sender_id === currentUserId && 'Ви: '}
                         {lastMessage?.content ||
-                          (Array.isArray(lastMessage?.attachments) && lastMessage.attachments.length > 0 ? '📎 Медіа' : 'Немає повідомлень')}
+                          (Array.isArray(lastMessage?.attachments) &&
+                          lastMessage.attachments.length > 0
+                            ? '📎 Медіа'
+                            : 'Немає повідомлень')}
                       </p>
                       {isUnread && (
                         <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)] shrink-0" />

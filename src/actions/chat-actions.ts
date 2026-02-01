@@ -132,7 +132,7 @@ export async function markAsReadAction(chatId: string, messageId: string) {
 
     // Determine which read field to update based on who the user is
     const updateData: any = {};
-    
+
     if (chat.user_id === user.id) {
       updateData.user_last_read_id = messageId;
     } else if (chat.recipient_id === user.id) {
@@ -142,10 +142,7 @@ export async function markAsReadAction(chatId: string, messageId: string) {
     }
 
     // Update the chat with the new read status
-    await db
-      .update(chats)
-      .set(updateData)
-      .where(eq(chats.id, chatId));
+    await db.update(chats).set(updateData).where(eq(chats.id, chatId));
 
     return { success: true };
   } catch (error) {

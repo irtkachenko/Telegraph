@@ -1,5 +1,5 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { type CookieOptions, createServerClient } from '@supabase/ssr';
+import { type NextRequest, NextResponse } from 'next/server';
 import { isStaticAsset } from '@/config/storage.config';
 
 export async function middleware(request: NextRequest) {
@@ -35,12 +35,14 @@ export async function middleware(request: NextRequest) {
           response.cookies.set({ name, value: '', ...options });
         },
       },
-    }
+    },
   );
 
   // Використовуємо try/catch, щоб Middleware не "падав", якщо з сесією щось не так
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const user = session?.user ?? null;
 
     const url = request.nextUrl.clone();
@@ -59,7 +61,6 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/chat';
       return NextResponse.redirect(url);
     }
-
   } catch (e) {
     // Якщо сталася будь-яка помилка авторизації (сесія біта тощо)
     // Просто кидаємо на головну, якщо ми не на публічній сторінці
@@ -74,7 +75,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
