@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import ChatInput from '@/components/chat/ChatInput';
@@ -75,6 +75,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleScrollToMessage = (messageId: string) => {
     scrollToMessage(messageId, { align: 'center' });
   };
+
+  // --- ОПТИМІЗАЦІЯ: Створюємо Map індексів повідомлень для O(1) пошуку ---
+  const messageIndexMap = useMemo(() => {
+    const map = new Map();
+    messages.forEach((m, index) => map.set(m.id, index));
+    return map;
+  }, [messages]);
 
   // --- ЛОГІКА ОНОВЛЕННЯ ГАЛОЧОК ---
   const recipientLastReadAt = (() => {
@@ -229,39 +236,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 fetchPreviousPage();
               }
             }}
-            itemContent={(_index, message) => (
-              <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  currentUserId={user?.id}
-                  isRead={
-                    // 1. Повідомлення відправив Я
-                    message.sender_id === user?.id &&
-                    // 2. У нас є ID прочитаного повідомлення від іншого користувача
-                    !!chat?.recipient_last_read_id &&
-                    // 3. Знайдемо повідомлення в масиві повідомлень
-                    (() => {
-                      const readMessage = messages.find(
-                        (m) => m.id === chat.recipient_last_read_id,
-                      );
-                      return readMessage
-                        ? // 4. Порівнюємо час створення поточного повідомлення з часом прочитання
-                          new Date(message.created_at).getTime() <=
-                            new Date(readMessage.created_at).getTime()
-                        : false;
-                    })()
-                  }
-                  isEditing={editingMessage?.id === message.id}
-                  onReply={handleReply}
-                  onEdit={handleEdit}
-                  onDelete={setMessageToDelete}
-                  onScrollToMessage={handleScrollToMessage}
-                  isHighlighed={highlightedId === message.id}
-                  otherParticipantName={otherParticipant?.name || undefined}
-                />
-              </div>
-            )}
+            itemContent={(_index, message) => {
+              // O(1) пошук індексу повідомлення
+              const currentMessageIndex = messageIndexMap.get(message.id);
+              const recipientLastReadIndex = messageIndexMap.get(chat?.recipient_last_read_id);
+              const isRead = currentMessageIndex !== undefined && 
+                             recipientLastReadIndex !== undefined && 
+                             currentMessageIndex <= recipientLastReadIndex;
+
+              return (
+                <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    currentUserId={user?.id}
+                    isRead={
+                      // 1. Повідомлення відправив Я
+                      message.sender_id === user?.id &&
+                      // 2. У нас є ID прочитаного повідомлення від іншого користувача
+                      !!chat?.recipient_last_read_id &&
+                      // 3. O(1) порівняння індексів замість O(n) пошуку
+                      isRead
+                    }
+                    isEditing={editingMessage?.id === message.id}
+                    onReply={handleReply}
+                    onEdit={handleEdit}
+                    onDelete={setMessageToDelete}
+                    onScrollToMessage={handleScrollToMessage}
+                    isHighlighed={highlightedId === message.id}
+                    otherParticipantName={otherParticipant?.name || undefined}
+                  />
+                </div>
+              );
+            }}
             components={{
               Header: () => (
                 <div className="py-10 text-center">
