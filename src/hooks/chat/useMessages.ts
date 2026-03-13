@@ -28,7 +28,7 @@ export function useMessages(chatId: string) {
 
       const { data, error } = await supabase
         .from('messages')
-        .select('*, reply_to:reply_to_id(*), "user":sender_id(id, name, image), updated_at')
+        .select('*, reply_to:reply_to_id(*), "users":sender_id(id, name, image), updated_at')
         .eq('chat_id', chatId)
         .order('created_at', { ascending: false })
         .limit(50)

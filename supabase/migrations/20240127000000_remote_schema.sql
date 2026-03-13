@@ -39,7 +39,7 @@ FOR EACH ROW EXECUTE FUNCTION public.check_upload_rate_limit();
 -- 2. УВІМКНЕННЯ RLS (Row Level Security)
 -- ==========================================
 -- Важливо: використовуємо назви таблиць з твоєї Drizzle схеми
-ALTER TABLE public.user ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
@@ -47,12 +47,12 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 -- ==========================================
 -- 3. ПОЛІТИКИ ДЛЯ КОРИСТУВАЧІВ (Таблиця "user")
 -- ==========================================
-DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.user;
-CREATE POLICY "Profiles are viewable by everyone" ON public.user
+DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.users;
+CREATE POLICY "Profiles are viewable by everyone" ON public.users
 FOR SELECT USING (true);
 
-DROP POLICY IF EXISTS "Users can update own profile" ON public.user;
-CREATE POLICY "Users can update own profile" ON public.user
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+CREATE POLICY "Users can update own profile" ON public.users
 FOR UPDATE USING (auth.uid()::text = id);
 
 

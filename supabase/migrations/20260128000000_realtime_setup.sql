@@ -1,5 +1,5 @@
 -- Enable REPLICA IDENTITY FULL for the tables to provide full row data in payloads
-ALTER TABLE public.user REPLICA IDENTITY FULL;
+ALTER TABLE public.users REPLICA IDENTITY FULL;
 ALTER TABLE public.chats REPLICA IDENTITY FULL;
 ALTER TABLE public.messages REPLICA IDENTITY FULL;
 
@@ -12,7 +12,7 @@ BEGIN
         -- Add tables to existing publication. 
         -- We use a sub-DO block to handle "already exists" errors for each table.
         BEGIN
-            ALTER PUBLICATION supabase_realtime ADD TABLE public.user;
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
         EXCEPTION WHEN duplicate_object THEN
             NULL;
         END;
@@ -30,6 +30,6 @@ BEGIN
         END;
     ELSE
         -- Create publication and add tables
-        CREATE PUBLICATION supabase_realtime FOR TABLE public.user, public.chats, public.messages;
+        CREATE PUBLICATION supabase_realtime FOR TABLE public.users, public.chats, public.messages;
     END IF;
 END $$;

@@ -3,7 +3,7 @@
 -- ==========================================
 
 -- Таблиця користувачів
-CREATE TABLE IF NOT EXISTS public.user (
+CREATE TABLE IF NOT EXISTS public.users (
     id uuid PRIMARY KEY,
     name text,
     email text NOT NULL,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS public.user (
 -- Таблиця чатів
 CREATE TABLE IF NOT EXISTS public.chats (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.user(id) ON DELETE CASCADE,
-    recipient_id uuid REFERENCES public.user(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    recipient_id uuid REFERENCES public.users(id) ON DELETE CASCADE,
     title text NOT NULL DEFAULT 'New Chat'::text,
     created_at timestamp without time zone NOT NULL DEFAULT now(),
     user_last_read_id uuid,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.chats (
 CREATE TABLE IF NOT EXISTS public.messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     chat_id uuid NOT NULL REFERENCES public.chats(id) ON DELETE CASCADE,
-    sender_id uuid NOT NULL REFERENCES public.user(id) ON DELETE CASCADE,
+    sender_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     content text NOT NULL,
     attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
     reply_to_id uuid REFERENCES public.messages(id) ON DELETE SET NULL,
@@ -80,7 +80,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user (id, email, name, image)
+  INSERT INTO public.users (id, email, name, image)
   VALUES (
     new.id, 
     new.email, 
@@ -154,12 +154,12 @@ CREATE TRIGGER trigger_limit_chat_creation BEFORE INSERT ON public.chats FOR EAC
 -- 4. ПОЛІТИКИ БЕЗПЕКИ (RLS)
 -- ==========================================
 
-ALTER TABLE public.user ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
 -- User Policies
-CREATE POLICY "Users can view all contacts" ON public.user FOR SELECT USING (true);
+CREATE POLICY "Users can view all contacts" ON public.users FOR SELECT USING (true);
 
 -- Chat Policies
 CREATE POLICY "Users can view their own chats" ON public.chats FOR SELECT USING (auth.uid() = user_id OR auth.uid() = recipient_id);

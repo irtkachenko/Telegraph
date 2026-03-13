@@ -18,7 +18,7 @@ export function useSearchUsers(queryText: string) {
       if (!currentUser?.id) return [];
 
       let query = supabase
-        .from('user')
+        .from('users')
         .select('id, name, email, image, last_seen')
         .neq('id', currentUser.id);
 
