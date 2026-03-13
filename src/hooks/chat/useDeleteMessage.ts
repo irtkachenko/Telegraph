@@ -1,10 +1,6 @@
 'use client';
 
-import { 
-  type InfiniteData, 
-  useMutation, 
-  useQueryClient 
-} from '@tanstack/react-query';
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import type { Message } from '@/types';
@@ -35,9 +31,7 @@ export function useDeleteMessage(chatId: string) {
         if (!old) return old;
         return {
           ...old,
-          pages: old.pages.map((page) =>
-            page.filter((msg) => msg.id !== messageId),
-          ),
+          pages: old.pages.map((page) => page.filter((msg) => msg.id !== messageId)),
         };
       });
 

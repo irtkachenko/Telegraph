@@ -3,9 +3,9 @@
  * Provides consistent error handling and success responses
  */
 
-export type ActionResponse<T> = 
+export type ActionResponse<T> =
   | { success: true; data: T }
-  | { success: false; error: string; details?: any };
+  | { success: false; error: string; details?: unknown };
 
 /**
  * Helper function to create successful responses
@@ -17,7 +17,7 @@ export function createSuccessResponse<T>(data: T): ActionResponse<T> {
 /**
  * Helper function to create error responses
  */
-export function createErrorResponse(error: string, details?: any): ActionResponse<never> {
+export function createErrorResponse(error: string, details?: unknown): ActionResponse<never> {
   return { success: false, error, details };
 }
 

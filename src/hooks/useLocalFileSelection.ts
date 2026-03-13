@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { createClient } from '@/lib/supabase/client';
+import { fileUploadSchema, singleFileSchema } from '@/lib/validations/chat';
 import type { Attachment } from '@/types';
-import { singleFileSchema, fileUploadSchema } from '@/lib/validations/chat';
 
 export interface SelectedFile {
   id: string;
@@ -43,13 +43,13 @@ export function useLocalFileSelection() {
 
   const validateFile = (file: File): { valid: boolean; error?: string } => {
     // Validate individual file using Zod schema
-    const fileValidation = singleFileSchema.safeParse({ 
+    const fileValidation = singleFileSchema.safeParse({
       file,
       maxSize: 5 * 1024 * 1024, // 5MB
     });
 
     if (!fileValidation.success) {
-      const errorMessages = fileValidation.error.issues.map((err: any) => err.message).join(', ');
+      const errorMessages = fileValidation.error.issues.map((err: { message: string }) => err.message).join(', ');
       return { valid: false, error: errorMessages };
     }
 
@@ -63,7 +63,7 @@ export function useLocalFileSelection() {
     }
 
     const fileArray = Array.from(files);
-    
+
     // Check total file count limit (max 5 files)
     const currentFileCount = selectedFiles.length;
     if (currentFileCount + fileArray.length > 5) {
@@ -83,7 +83,7 @@ export function useLocalFileSelection() {
       const id = crypto.randomUUID();
       const previewUrl = URL.createObjectURL(file);
       const isImage = file.type.startsWith('image/');
-      
+
       let metadata: SelectedFile['metadata'] = {
         name: file.name,
         size: file.size,
@@ -143,7 +143,7 @@ export function useLocalFileSelection() {
         const timestamp = Date.now();
         const safeName = selectedFile.file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
         const fileName = `${timestamp}_${safeName}`;
-        
+
         // Important path structure for RLS policy
         const filePath = `${chatId}/${user.id}/${fileName}`;
 
@@ -179,9 +179,7 @@ export function useLocalFileSelection() {
         }
 
         // Get public URL
-        const { data: publicData } = supabase.storage
-          .from('attachments')
-          .getPublicUrl(filePath);
+        const { data: publicData } = supabase.storage.from('attachments').getPublicUrl(filePath);
 
         const attachment: Attachment = {
           id: selectedFile.id,

@@ -1,14 +1,11 @@
 'use client';
 
-import { 
-  type InfiniteData, 
-  useInfiniteQuery 
-} from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
-import { useMarkAsRead } from './useMarkAsRead';
 import type { Message } from '@/types';
+import { useMarkAsRead } from './useMarkAsRead';
 
 /**
  * Хук для отримання повідомлень чату з підтримкою нескінченної пагінації.
@@ -41,7 +38,7 @@ export function useMessages(chatId: string) {
         console.error('Помилка завантаження повідомлень:', error.message);
         throw error;
       }
-      
+
       const normalizedData = (data as unknown as Message[]).map((msg) => ({
         ...msg,
         attachments: msg.attachments || [],

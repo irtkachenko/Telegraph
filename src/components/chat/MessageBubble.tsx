@@ -184,7 +184,9 @@ export default function MessageBubble({
                   message.is_optimistic && 'opacity-70',
                 )}
               >
-                <span className="text-[9px] font-medium" suppressHydrationWarning>{formattedDate}</span>
+                <span className="text-[9px] font-medium" suppressHydrationWarning>
+                  {formattedDate}
+                </span>
 
                 {isEdited && (
                   <span className="text-[10px] text-gray-400/70 ml-1 font-medium">(edited)</span>

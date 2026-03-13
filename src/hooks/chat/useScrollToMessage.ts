@@ -1,8 +1,8 @@
 'use client';
 
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { type VirtuosoHandle } from 'react-virtuoso';
+import type { VirtuosoHandle } from 'react-virtuoso';
 import { toast } from 'sonner';
 import type { Message } from '@/types';
 
@@ -97,9 +97,9 @@ export function useScrollToMessage(
       }
 
       await fetchPreviousPage();
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200));
 
-      const freshData = queryClient.getQueryData(['messages', chatId]) as any;
+      const freshData = queryClient.getQueryData(['messages', chatId]) as InfiniteData<Message> | undefined;
       const freshMessages = freshData?.pages?.flat() || [];
 
       if (tryScroll(freshMessages)) {

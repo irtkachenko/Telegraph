@@ -20,7 +20,7 @@ export function createClient() {
     global: {
       fetch: async (url, options) => {
         // Перевіряємо, чи ми хочемо вимкнути тост для цього конкретного запиту
-        const skipToast = options?.headers && (options.headers as any)['x-skip-toast'] === 'true';
+        const skipToast = options?.headers && (options.headers as Record<string, string>)['x-skip-toast'] === 'true';
 
         const response = await fetch(url, options);
 
@@ -29,7 +29,8 @@ export function createClient() {
 
           try {
             const errorData = await response.clone().json();
-            const message = errorData?.message || errorData?.error_description || response.statusText;
+            const message =
+              errorData?.message || errorData?.error_description || response.statusText;
 
             toast.error(response.status >= 500 ? 'Помилка сервера' : 'Помилка запиту', {
               description: message,

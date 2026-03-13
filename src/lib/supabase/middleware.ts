@@ -21,7 +21,7 @@ export async function createMiddlewareClient(request: NextRequest) {
       setAll(cookiesToSet) {
         // Оновлюємо куки в запиті (для поточної роботи сервера)
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        
+
         // Перестворюємо відповідь з оновленим запитом
         supabaseResponse = NextResponse.next({
           request,
@@ -29,7 +29,7 @@ export async function createMiddlewareClient(request: NextRequest) {
 
         // Оновлюємо куки у відповіді (щоб вони полетіли в браузер)
         cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options)
+          supabaseResponse.cookies.set(name, value, options),
         );
       },
     },

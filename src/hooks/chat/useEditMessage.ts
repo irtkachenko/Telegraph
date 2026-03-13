@@ -1,10 +1,6 @@
 'use client';
 
-import { 
-  type InfiniteData, 
-  useMutation, 
-  useQueryClient 
-} from '@tanstack/react-query';
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import type { Message } from '@/types';

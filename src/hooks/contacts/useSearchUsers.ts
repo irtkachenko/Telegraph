@@ -2,8 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase/client';
 import { sanitizeSearchQuery } from '@/lib/sanitize';
+import { supabase } from '@/lib/supabase/client';
 import type { User } from '@/types';
 
 /**

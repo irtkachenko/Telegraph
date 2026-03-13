@@ -4,14 +4,14 @@ import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { createClient } from '@/lib/supabase/client';
-import { 
-  storageConfig, 
-  getFileTypeCategory, 
-  isAllowedFileExtension 
+import {
+  getFileTypeCategory,
+  isAllowedFileExtension,
+  storageConfig,
 } from '@/config/storage.config';
-import { useStorageLimits } from './useDynamicStorageConfig';
+import { createClient } from '@/lib/supabase/client';
 import type { Attachment } from '@/types';
+import { useStorageLimits } from './useDynamicStorageConfig';
 
 export interface OptimisticAttachment extends Attachment {
   file: File;
@@ -127,9 +127,7 @@ export function useOptimisticAttachment(chatId: string) {
 
       setAttachments((prev) =>
         prev.map((a) =>
-          a.id === id
-            ? { ...a, url: publicData.publicUrl, uploading: false, progress: 100 }
-            : a,
+          a.id === id ? { ...a, url: publicData.publicUrl, uploading: false, progress: 100 } : a,
         ),
       );
 
@@ -149,10 +147,11 @@ export function useOptimisticAttachment(chatId: string) {
   const uploadAllFiles = async (files: File[]): Promise<Attachment[]> => {
     const uploadPromises = files.map((file) => uploadFile(file));
     const results = await Promise.allSettled(uploadPromises);
-    
+
     return results
-      .filter((result): result is PromiseFulfilledResult<Attachment> => 
-        result.status === 'fulfilled' && result.value !== null
+      .filter(
+        (result): result is PromiseFulfilledResult<Attachment> =>
+          result.status === 'fulfilled' && result.value !== null,
       )
       .map((result) => result.value);
   };

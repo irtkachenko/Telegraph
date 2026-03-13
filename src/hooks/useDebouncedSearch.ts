@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { searchSchema, type SearchInput } from '@/lib/validations/chat';
+import { type SearchInput, searchSchema } from '@/lib/validations/chat';
 
 /**
  * Custom hook for debounced search with validation
@@ -15,7 +15,7 @@ export function useDebouncedSearch(initialQuery: string = '', delay: number = 30
     const handler = setTimeout(() => {
       // Validate and sanitize the search query
       const validationResult = searchSchema.safeParse({ query: inputValue });
-      
+
       if (validationResult.success) {
         setDebouncedQuery(validationResult.data.query);
         setIsValid(true);
@@ -48,14 +48,14 @@ export function useDebouncedSearch(initialQuery: string = '', delay: number = 30
     // Input state (immediate)
     inputValue,
     setInputValue: handleInputChange,
-    
+
     // Debounced and validated query (for API calls)
     debouncedQuery,
-    
+
     // Validation state
     isValid,
     validationError,
-    
+
     // Utilities
     clearSearch,
   };

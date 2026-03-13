@@ -240,9 +240,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               // O(1) пошук індексу повідомлення
               const currentMessageIndex = messageIndexMap.get(message.id);
               const recipientLastReadIndex = messageIndexMap.get(chat?.recipient_last_read_id);
-              const isRead = currentMessageIndex !== undefined && 
-                             recipientLastReadIndex !== undefined && 
-                             currentMessageIndex <= recipientLastReadIndex;
+              const isRead =
+                currentMessageIndex !== undefined &&
+                recipientLastReadIndex !== undefined &&
+                currentMessageIndex <= recipientLastReadIndex;
 
               return (
                 <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">

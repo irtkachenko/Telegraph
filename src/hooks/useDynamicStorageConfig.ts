@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
-import { 
-  storageConfig, 
-  isAllowedFileExtension, 
-  getFileTypeCategory 
+import { useState } from 'react';
+import {
+  getFileTypeCategory,
+  isAllowedFileExtension,
+  storageConfig,
 } from '@/config/storage.config';
+import { createClient } from '@/lib/supabase/client';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -59,7 +59,7 @@ export function useStorageLimits() {
 
   const getMaxFileSize = (category: 'images' | 'videos' | 'documents'): number => {
     if (!policies) return storageConfig.fileTypes[category].maxFileSize;
-    
+
     // Use dynamic limit if available, otherwise fall back to config
     const categoryMaxSize = storageConfig.fileTypes[category].maxFileSize;
     return Math.min(policies.maxFileSize, categoryMaxSize);
@@ -67,7 +67,7 @@ export function useStorageLimits() {
 
   const isAllowedExtension = (extension: string): boolean => {
     if (!policies) return isAllowedFileExtension(extension);
-    
+
     const ext = extension.toLowerCase();
     return policies.allowedExtensions.includes(ext);
   };
@@ -78,7 +78,7 @@ export function useStorageLimits() {
 
   const validateFile = (file: File): { valid: boolean; error?: string } => {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    
+
     if (!isAllowedExtension(extension)) {
       return { valid: false, error: 'Тип файлу не підтримується' };
     }
@@ -91,9 +91,9 @@ export function useStorageLimits() {
     const maxSize = getMaxFileSize(category);
     if (file.size > maxSize) {
       const maxSizeMB = Math.round(maxSize / 1024 / 1024);
-      return { 
-        valid: false, 
-        error: `Файл занадто великий. Максимальний розмір: ${maxSizeMB}MB` 
+      return {
+        valid: false,
+        error: `Файл занадто великий. Максимальний розмір: ${maxSizeMB}MB`,
       };
     }
 
@@ -118,7 +118,7 @@ export function useUploadRateLimit() {
 
   const canUpload = (): boolean => {
     const rateLimit = getRateLimit();
-    
+
     // Reset counter if time window has passed
     if (resetTime && new Date() > resetTime) {
       setUploadCount(0);
@@ -131,7 +131,7 @@ export function useUploadRateLimit() {
 
   const recordUpload = (): void => {
     const rateLimit = getRateLimit();
-    
+
     if (!resetTime) {
       // Set reset time to 1 minute from now
       const now = new Date();

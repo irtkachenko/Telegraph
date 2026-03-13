@@ -1,9 +1,9 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
-import type { AuthChangeEvent, Session, User, SupabaseClient } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, SupabaseClient, User } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
+import { createClient } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -51,7 +51,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           setLoading(false);
         } else {
           // Ми передаємо об'єкт схожий на сесію для сумісності з існуючим хендлером
-          handleAuthStateChange('INITIAL_SESSION', user ? { user } as any : null);
+          handleAuthStateChange('INITIAL_SESSION', user ? ({ user } as Session) : null);
         }
       } catch (error) {
         console.error('Error during auth initialization:', error);

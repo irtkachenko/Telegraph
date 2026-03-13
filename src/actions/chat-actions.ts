@@ -1,9 +1,9 @@
 'use server';
 
-import { z } from 'zod';
 import { and, eq, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
 import { db } from '@/db';
 import { chats, users } from '@/db/schema';
 import { createClient } from '@/lib/supabase/server';
@@ -155,7 +155,7 @@ export async function markAsReadAction(chatId: string, messageId: string) {
     }
 
     // Determine which read field to update based on who the user is
-    const updateData: any = {};
+    const updateData: { user_last_read_id?: string; recipient_last_read_id?: string } = {};
 
     if (chat.user_id === user.id) {
       updateData.user_last_read_id = messageId;

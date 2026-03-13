@@ -1,10 +1,6 @@
 'use client';
 
-import { 
-  type InfiniteData, 
-  useMutation, 
-  useQueryClient 
-} from '@tanstack/react-query';
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
@@ -67,7 +63,7 @@ export function useSendMessage(chatId: string) {
         updated_at: null,
         reply_to_id: newMessage.reply_to_id || null,
         reply_to: parentMessage,
-        attachments: (newMessage.attachments || []).map(att => ({ ...att, uploading: true })),
+        attachments: (newMessage.attachments || []).map((att) => ({ ...att, uploading: true })),
         is_optimistic: true,
       } as Message;
 
@@ -93,8 +89,8 @@ export function useSendMessage(chatId: string) {
         if (!old) return old;
         return {
           ...old,
-          pages: old.pages.map(page =>
-            page.map(msg =>
+          pages: old.pages.map((page) =>
+            page.map((msg) =>
               msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content
                 ? savedMessage
                 : msg,

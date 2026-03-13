@@ -1,9 +1,10 @@
 'use client';
 
-import type { User } from '@supabase/supabase-js';
+import type { User, RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
+import { useRef } from 'react';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -13,8 +14,7 @@ interface PresenceState {
 }
 
 interface PresenceManager {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  channel: any;
+  channel: RealtimeChannel | null;
   userId: string | null;
   subscribers: number;
   heartbeatInterval: NodeJS.Timeout | null;
@@ -23,9 +23,6 @@ interface PresenceManager {
   debounceTimer: NodeJS.Timeout | null;
   pendingUsers: Set<string>;
 }
-
-// Global singleton manager for presence channel
-let presenceManager: PresenceManager | null = null;
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 2000; // 2 seconds
@@ -59,10 +56,12 @@ function startHeartbeat(manager: PresenceManager): void {
   if (manager.heartbeatInterval) {
     clearInterval(manager.heartbeatInterval);
   }
-
   manager.heartbeatInterval = setInterval(() => {
-    if (document.visibilityState === 'visible') {
-      updateLastSeen();
+    if (manager.channel) {
+      manager.channel.track({
+        user_id: manager.userId!,
+        online_at: new Date().toISOString(),
+      });
     }
   }, HEARTBEAT_INTERVAL);
 }
@@ -77,21 +76,13 @@ function stopHeartbeat(manager: PresenceManager): void {
 function debouncedPresenceUpdate(
   manager: PresenceManager,
   setOnlineUsers: (users: Set<string>) => void,
-  newUsers: Set<string>,
+  onlineIds: Set<string>,
 ): void {
-  // Clear existing timer
   if (manager.debounceTimer) {
     clearTimeout(manager.debounceTimer);
   }
-
-  // Add new users to pending set
-  newUsers.forEach((user) => manager.pendingUsers.add(user));
-
-  // Set new timer
   manager.debounceTimer = setTimeout(() => {
-    // Apply the debounced update
-    setOnlineUsers(new Set(manager.pendingUsers));
-    manager.pendingUsers.clear();
+    setOnlineUsers(onlineIds);
     manager.debounceTimer = null;
   }, PRESENCE_DEBOUNCE_DELAY);
 }
@@ -106,57 +97,59 @@ function setupChannel(
     config: { presence: { key: userId } },
   });
 
-  manager.channel
-    .on('presence', { event: 'sync' }, () => {
-      const state = manager.channel.presenceState();
-      const onlineIds = new Set<string>();
-      for (const key of Object.keys(state)) {
-        onlineIds.add(key);
-      }
-      // Use debounced update to prevent render storms
-      debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'user' }, () => {
-      // Invalidate contacts queries when users change
-      queryClient.invalidateQueries({ queryKey: ['contacts'], exact: false });
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
-      // Invalidate chats queries when chats change
-      queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
-    })
-    .subscribe(async (status: string) => {
-      switch (status) {
-        case 'SUBSCRIBED':
-          setConnectionState('CONNECTED');
-          manager.reconnectAttempts = 0;
-          await manager.channel.track({
-            user_id: userId,
-            online_at: new Date().toISOString(),
-          });
-          startHeartbeat(manager);
-          break;
+  if (manager.channel) {
+    manager.channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = manager.channel!.presenceState();
+        const onlineIds = new Set<string>();
+        for (const key of Object.keys(state)) {
+          onlineIds.add(key);
+        }
+        // Use debounced update to prevent render storms
+        debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user' }, () => {
+        // Invalidate contacts queries when users change
+        queryClient.invalidateQueries({ queryKey: ['contacts'], exact: false });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
+        // Invalidate chats queries when chats change
+        queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
+      })
+      .subscribe(async (status: string) => {
+        switch (status) {
+          case 'SUBSCRIBED':
+            setConnectionState('CONNECTED');
+            manager.reconnectAttempts = 0;
+            await manager.channel!.track({
+              user_id: userId,
+              online_at: new Date().toISOString(),
+            });
+            startHeartbeat(manager);
+            break;
 
-        case 'CLOSED':
-        case 'CHANNEL_ERROR':
-        case 'TIMED_OUT':
-          setConnectionState('DISCONNECTED');
-          await updateLastSeen();
-          stopHeartbeat(manager);
+          case 'CLOSED':
+          case 'CHANNEL_ERROR':
+          case 'TIMED_OUT':
+            setConnectionState('DISCONNECTED');
+            await updateLastSeen();
+            stopHeartbeat(manager);
 
-          // Attempt reconnection if we haven't exceeded max attempts
-          if (manager.reconnectAttempts < manager.maxReconnectAttempts && manager.subscribers > 0) {
-            manager.reconnectAttempts++;
-            setConnectionState('RECONNECTING');
+            // Attempt reconnection if we haven't exceeded max attempts
+            if (manager.reconnectAttempts < manager.maxReconnectAttempts && manager.subscribers > 0) {
+              manager.reconnectAttempts++;
+              setConnectionState('RECONNECTING');
 
-            setTimeout(() => {
-              if (manager.channel && manager.subscribers > 0) {
-                setupChannel(manager, userId, setOnlineUsers, setConnectionState);
-              }
-            }, RECONNECT_DELAY * manager.reconnectAttempts);
-          }
-          break;
-      }
-    });
+              setTimeout(() => {
+                if (manager.channel && manager.subscribers > 0) {
+                  setupChannel(manager, userId, setOnlineUsers, setConnectionState);
+                }
+              }, RECONNECT_DELAY * manager.reconnectAttempts);
+            }
+            break;
+        }
+      });
+  }
 }
 
 export const usePresenceStore = create<PresenceState>((set) => ({
@@ -169,90 +162,97 @@ export const usePresenceStore = create<PresenceState>((set) => ({
 // Optimized selectors to prevent unnecessary re-renders
 export const useOnlineUsers = () => usePresenceStore((state) => state.onlineUsers);
 export const useConnectionState = () => usePresenceStore((state) => state.connectionState);
-export const useIsUserOnline = (userId: string) => 
+export const useIsUserOnline = (userId: string) =>
   usePresenceStore((state) => state.onlineUsers.has(userId));
-export const useOnlineUserCount = () => 
-  usePresenceStore((state) => state.onlineUsers.size);
+export const useOnlineUserCount = () => usePresenceStore((state) => state.onlineUsers.size);
 
 export function usePresence() {
   const onlineUsers = useOnlineUsers();
   return { onlineUsers };
 }
 
-// Hook for managing presence subscription with singleton pattern
-export function usePresenceSubscription(user: User | null) {
+export function usePresenceSubscription() {
   const setOnlineUsers = usePresenceStore((state) => state.setOnlineUsers);
   const setConnectionState = usePresenceStore((state) => state.setConnectionState);
+  const managerRef = useRef<PresenceManager | null>(null);
+
+  // Store the ref globally for cleanup
+  globalManagerRef = managerRef;
+
+  const subscribe = (user: User | null) => {
+    if (!user?.id) {
+      console.warn('Cannot subscribe to presence: no user ID');
+      return;
+    }
+
+    // Initialize manager if it doesn't exist
+    if (!managerRef.current) {
+      managerRef.current = createPresenceManager();
+    }
+
+    // If this is a new user, clean up the old channel
+    if (managerRef.current.userId && managerRef.current.userId !== user.id) {
+      cleanupPresence();
+      managerRef.current = createPresenceManager();
+    }
+
+    managerRef.current.userId = user.id;
+    managerRef.current.subscribers++;
+
+    // Setup channel if not already done
+    if (!managerRef.current.channel && managerRef.current.subscribers === 1) {
+      setupChannel(managerRef.current, user.id, setOnlineUsers, setConnectionState);
+
+      // Add global event listeners
+      window.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('beforeunload', updateLastSeen);
+    }
+  };
+
+  const unsubscribe = () => {
+    if (!managerRef.current) return;
+
+    managerRef.current.subscribers--;
+
+    // Cleanup when no more subscribers
+    if (managerRef.current.subscribers <= 0) {
+      cleanupPresence();
+    }
+  };
+
+  const getConnectionState = () => {
+    return usePresenceStore.getState().connectionState;
+  };
 
   return {
-    subscribe: () => {
-      if (!user?.id) {
-        console.warn('Cannot subscribe to presence: no user ID');
-        return;
-      }
-
-      // Initialize manager if it doesn't exist
-      if (!presenceManager) {
-        presenceManager = createPresenceManager();
-      }
-
-      // If this is a new user, clean up the old channel
-      if (presenceManager.userId && presenceManager.userId !== user.id) {
-        cleanupPresence();
-        presenceManager = createPresenceManager();
-      }
-
-      presenceManager.userId = user.id;
-      presenceManager.subscribers++;
-
-      // Setup channel if not already done
-      if (!presenceManager.channel && presenceManager.subscribers === 1) {
-        setupChannel(presenceManager, user.id, setOnlineUsers, setConnectionState);
-
-        // Add global event listeners
-        window.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('beforeunload', updateLastSeen);
-      }
-
-      },
-
-    unsubscribe: () => {
-      if (!presenceManager) return;
-
-      presenceManager.subscribers--;
-
-      // Cleanup when no more subscribers
-      if (presenceManager.subscribers <= 0) {
-        cleanupPresence();
-      }
-    },
-
-    getConnectionState: () => {
-      return usePresenceStore.getState().connectionState;
-    },
+    subscribe,
+    unsubscribe,
+    getConnectionState,
   };
 }
 
 // Global cleanup function
+let globalManagerRef: { current: PresenceManager | null } = { current: null };
+
 function cleanupPresence(): void {
-  if (!presenceManager) return;
+  if (!globalManagerRef.current) return;
 
   // Clear debounce timer
-  if (presenceManager.debounceTimer) {
-    clearTimeout(presenceManager.debounceTimer);
-    presenceManager.debounceTimer = null;
+  if (globalManagerRef.current.debounceTimer) {
+    clearTimeout(globalManagerRef.current.debounceTimer);
+    globalManagerRef.current.debounceTimer = null;
   }
 
   // Update last seen before disconnecting
   updateLastSeen();
 
   // Stop heartbeat
-  stopHeartbeat(presenceManager);
+  stopHeartbeat(globalManagerRef.current);
 
   // Remove channel
-  if (presenceManager.channel) {
-    supabase.removeChannel(presenceManager.channel);
-    presenceManager.channel = null;
+  if (globalManagerRef.current.channel) {
+    supabase.removeChannel(globalManagerRef.current.channel);
+    globalManagerRef.current.channel = null;
   }
 
   // Remove global event listeners
@@ -260,7 +260,7 @@ function cleanupPresence(): void {
   window.removeEventListener('beforeunload', updateLastSeen);
 
   // Reset manager
-  presenceManager = null;
+  globalManagerRef.current = null;
 
   // Update store state
   usePresenceStore.getState().setConnectionState('DISCONNECTED');

@@ -6,6 +6,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
 import type { FullChat, Message } from '@/types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+interface NextRouterState {
+  query?: {
+    chatId?: string;
+  };
+}
 
 interface RealtimePayload<T = Record<string, unknown>> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -80,7 +87,7 @@ function messageExistsInCache(
 function getActiveChatId(queryClient: ReturnType<typeof useQueryClient>): string | null {
   // Try to get the current active chat from the router or global state
   // This is a placeholder - you might need to adjust based on your routing/state management
-  const routerState = (window as any).__NEXT_ROUTER_STATE__;
+  const routerState = (window as unknown as { __NEXT_ROUTER_STATE__?: NextRouterState }).__NEXT_ROUTER_STATE__;
   if (routerState?.query?.chatId) {
     return routerState.query.chatId;
   }
@@ -123,15 +130,15 @@ interface ChatPayload {
 }
 
 // Throttle utility for typing events
-function createThrottle<T extends (...args: any[]) => void>(func: T, delay: number): T {
+function createThrottle(func: (isTyping: boolean) => void, delay: number): (isTyping: boolean) => void {
   let timeoutId: NodeJS.Timeout | null = null;
   let lastExecTime = 0;
 
-  return ((...args: Parameters<T>) => {
+  return (isTyping: boolean) => {
     const currentTime = Date.now();
 
     if (currentTime - lastExecTime > delay) {
-      func(...args);
+      func(isTyping);
       lastExecTime = currentTime;
     } else {
       if (timeoutId) {
@@ -139,39 +146,39 @@ function createThrottle<T extends (...args: any[]) => void>(func: T, delay: numb
       }
       timeoutId = setTimeout(
         () => {
-          func(...args);
+          func(isTyping);
           lastExecTime = Date.now();
         },
         delay - (currentTime - lastExecTime),
       );
     }
-  }) as T;
+  };
 }
 
 // Global hook for user presence and chat list updates (no message subscriptions)
 export function useGlobalRealtime(user: User | null) {
   const queryClient = useQueryClient();
-  const { subscribe, unsubscribe } = usePresenceSubscription(user);
+  const { subscribe, unsubscribe } = usePresenceSubscription();
 
   useEffect(() => {
     if (!user?.id) {
       return;
     }
 
-    // Subscribe to presence using the singleton manager
-    subscribe();
+    // Subscribe to presence using singleton manager
+    subscribe(user);
 
     // Cleanup on unmount
     return () => {
       unsubscribe();
     };
-  }, [user?.id, subscribe, unsubscribe]);
+  }, [user?.id, subscribe, unsubscribe, user]);
 }
 
 // Chat-specific hook for message subscriptions with proper scoping and filtering
 export function useChatRealtime(chatId: string | null, user: User | null) {
   const queryClient = useQueryClient();
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const mountedRef = useRef<boolean>(true);
 
   // Cleanup function to ensure proper channel removal

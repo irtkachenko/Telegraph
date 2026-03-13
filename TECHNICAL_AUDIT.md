@@ -10,12 +10,11 @@
 ## 📋 Зміст
 
 1. [Загальна оцінка](#1-загальна-оцінка)
-2. [🔴 КРИТИЧНІ проблеми](#2--критичні-проблеми)
-3. [🟠 СЕРЙОЗНІ проблеми](#3--серйозні-проблеми)
-4. [🟡 СЕРЕДНІ проблеми](#4--середні-проблеми)
-5. [🔵 РЕКОМЕНДАЦІЇ з масштабування](#5--рекомендації-з-масштабування)
-6. [📐 Архітектурні зауваження](#6--архітектурні-зауваження)
-7. [🗺️ План дій (Roadmap)](#7-%EF%B8%8F-план-дій-roadmap)
+2. [� СЕРЙОЗНІ проблеми](#3--серйозні-проблеми)
+3. [🟡 СЕРЕДНІ проблеми](#4--середні-проблеми)
+4. [🔵 РЕКОМЕНДАЦІЇ з масштабування](#5--рекомендації-з-масштабування)
+5. [📐 Архітектурні зауваження](#6--архітектурні-зауваження)
+6. [🗺️ План дій (Roadmap)](#7-%EF%B8%8F-план-дій-roadmap)
 
 ---
 
@@ -23,188 +22,18 @@
 
 | Категорія | Оцінка | Коментар |
 |---|---|---|
-| **Архітектура** | 5/10 | God-file антипатерн, відсутність чіткого шару абстракцій |
-| **Безпека** | 4/10 | SQL-ін'єкція, витік сервіс-ключів, відсутність санітизації |
+| **Архітектура** | 8/10 | God-file видалено, правильна структура клієнтів |
+| **Безпека** | 9/10 | Всі критичні вразливості виправлені |
 | **Перформанс** | 5/10 | Нескінченні ре-рендери, витоки пам'яті, зайві підписки |
-| **Масштабованість** | 3/10 | Монолітні хуки, високий coupling, відсутність lazy loading |
-| **Типізація** | 6/10 | `any` у критичних місцях, відсутність branded types |
+| **Масштабованість** | 6/10 | Хуки розбиті, але високий coupling залишається |
+| **Типізація** | 9/10 | Всі `any` замінені на правильні типи |
 | **Тестування** | 1/10 | Повна відсутність тестів |
 | **DevOps / CI/CD** | 3/10 | Docker для dev, без production-ready конфігу |
-| **DX (Developer Experience)** | 6/10 | Є лінтери, але конфлікти ESLint vs Biome |
+| **DX (Developer Experience)** | 8/10 | Лінтери працюють, конфлікти вирішені |
 
-**Загальна оцінка: 4.1 / 10** — проект потребує серйозного рефакторингу перед виходом у production.
+**Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
----
 
-## 2. 🔴 КРИТИЧНІ проблеми
-
-### CRIT-01: SQL-ін'єкція через ilike без ескейпінгу
-
-**Файл:** `src/hooks/useChatHooks.ts` (рядок ~254)
-
-```typescript
-// ❌ КРИТИЧНО: queryText підставляється безпосередньо у SQL
-query = query.or(`name.ilike.%${queryText}%,email.ilike.%${queryText}%`).limit(10);
-```
-
-Якщо користувач введе `%` або `_` або `'`, злам ilike-патерну може дозволити витягнути дані, які не мали бути доступними. Supabase PostgREST передає ці значення напряму.
-
-**Виправлення:**
-```typescript
-const sanitized = queryText.replace(/[%_\\]/g, '\\$&');
-query = query.or(`name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
-```
-
----
-
-### CRIT-02: Service Role Key потенційно доступний на клієнті
-
-**Файл:** `src/lib/supabase.ts`
-
-```typescript
-// ❌ Цей файл не має 'use server' директиви і може потрапити в клієнтський бандл
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-export const supabaseService = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey)
-  : null;
-```
-
-`SUPABASE_SERVICE_ROLE_KEY` **обходить Row Level Security (RLS)** і має повний доступ до БД. Якщо цей файл імпортується клієнтським компонентом навіть непрямо — ключ потрапить у бандл.
-
-**Виправлення:**
-- Видалити `src/lib/supabase.ts` повністю — у вас вже є правильна архітектура в `src/lib/supabase/server.ts`
-- Service client створювати ТІЛЬКИ в server actions з явною директивою `'use server'`
-
----
-
-### CRIT-03: `getSession()` замість `getUser()` у middleware — обхід автентифікації
-
-**Файл:** `src/middleware.ts` (рядок 45)
-
-```typescript
-// ❌ Офіційна документація Supabase чітко говорить:
-// "getSession reads from cookies. It's not guaranteed to be authenticated."
-const { data: { session } } = await supabase.auth.getSession();
-const user = session?.user ?? null;
-```
-
-> ⛔ **УВАГА:** `getSession()` читає дані з cookie **без серверної валідації JWT**. Зловмисник може підробити cookie з довільним `user_id`. Використовуйте `getUser()` для серверної верифікації маркера.
-
-**Виправлення:** Замінити на `getUser()` або використати `updateSession()` з `src/lib/supabase/middleware.ts`, який вже правильно реалізований, але **не використовується!**
-
----
-
-### CRIT-04: Дублювання Supabase-клієнтів — хаотична архітектура авторизації
-
-У проекті існує **4 різних способи** створення Supabase-клієнта:
-
-| Файл | Тип | Використовується |
-|---|---|---|
-| `src/lib/supabase.ts` | Client (анонімний, без сесії) | Так (через хуки) |
-| `src/lib/supabase/client.ts` | Browser Client (з SSR) — **правильний** | Частково |
-| `src/lib/supabase/server.ts` | Server Client | Server Actions |
-| `AuthProvider.tsx` | Ще один Browser Client | Контекст |
-
-> ⚠️ Це означає, що у одному додатку одночасно існують клієнти з **різними конфігураціями авторизації** (один з `persistSession: false`, інший — з автоматичною). Це призводить до "фантомних" логаутів.
-
-**Виправлення:** Залишити рівно **2 клієнти**: `client.ts` (browser) і `server.ts` (server). Видалити `src/lib/supabase.ts`.
-
----
-
-### CRIT-05: `console.log` з дебаг-інформацією в production коді
-
-**Файл:** `drizzle.config.ts` (рядок 8)
-
-```typescript
-console.log("--- DEBUG: Чи знайдено файл? ---", process.env.DATABASE_URL ? "ТАК" : "НІ");
-```
-
-**Файл:** `src/hooks/useChatHooks.ts` (рядок ~555)
-
-```typescript
-console.log('Deleting message:', messageId, 'Current user:', user?.id, 'Chat ID:', chatId);
-console.log('Message ownership check:', { messageCheck, checkError });
-console.log('Delete response:', { data, error });
-```
-
-> ⛔ `console.log` з ID користувачів, повідомлень, і даних запитів у production коді — пряме порушення GDPR та витік технічних деталей.
-
----
-
-### CRIT-06: `ignoreDuringBuilds: true` для ESLint
-
-**Файл:** `next.config.ts` (рядок 3-5)
-
-```typescript
-eslint: {
-  ignoreDuringBuilds: true,  // ❌ Всі помилки проходять у продакшн
-},
-```
-
-Це означає, що зламаний код потрапить у build **без жодної перевірки**.
-
----
-
-### CRIT-07: Відсутня валідація `chatId` та `targetUserId` на сервері
-
-**Файл:** `src/actions/chat-actions.ts` (рядок 68)
-
-```typescript
-export async function getOrCreateChatAction(targetUserId: string) {
-  // ❌ Немає валідації, що targetUserId — це валідний UUID
-  // ❌ Немає перевірки, що targetUserId ≠ myId (чат з самим собою)
-}
-```
-
-```typescript
-export async function markAsReadAction(chatId: string, messageId: string) {
-  // ❌ Немає Zod-валідації вхідних параметрів
-}
-```
-
-**Виправлення:** Використати Zod для валідації **кожного** server action:
-```typescript
-import { z } from 'zod';
-const schema = z.object({
-  targetUserId: z.string().uuid(),
-});
-```
-
----
-
-## 3. 🟠 СЕРЙОЗНІ проблеми
-
-### HIGH-01: God-файл `useChatHooks.ts` — 850 рядків
-
-**Файл:** `src/hooks/useChatHooks.ts`
-
-Один файл містить **850 рядків** і **12 різних хуків** (useChats, useMarkAsRead, useChatDetails, useMessages, useSearchUsers, usePresence, useChatTyping, useEditMessage, useSendMessage, useDeleteMessage, useDeleteChat, useUpdateLastSeen, useScrollToMessage).
-
-> ⚠️ Це класичний God Object антипатерн. Будь-яка зміна в одному хуку призводить до ревалідації кешу усіх хуків у пам'яті. До того ж це унеможливлює code-splitting.
-
-**Виправлення:** Розбити на окремі файли:
-```
-hooks/
-├── chat/
-│   ├── useChats.ts
-│   ├── useChatDetails.ts
-│   ├── useSendMessage.ts
-│   ├── useDeleteMessage.ts
-│   ├── useEditMessage.ts
-│   ├── useDeleteChat.ts
-│   └── useMarkAsRead.ts
-├── messages/
-│   ├── useMessages.ts
-│   ├── useScrollToMessage.ts
-│   └── useChatTyping.ts
-├── contacts/
-│   └── useSearchUsers.ts
-└── user/
-    ├── usePresence.ts
-    └── useUpdateLastSeen.ts
-```
-
----
 
 ### HIGH-02: Дублювання хуків `useAttachment` / `useOptimisticAttachment`
 

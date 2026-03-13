@@ -2,10 +2,10 @@
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { useAttachment } from '@/hooks/useAttachment';
 import { useEditMessage, useSendMessage } from '@/hooks/chat';
+import { useAttachment } from '@/hooks/useAttachment';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
 import ComposerAddons from './ComposerAddons';
