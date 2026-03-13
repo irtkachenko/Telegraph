@@ -10,7 +10,6 @@
 ## 📋 Зміст
 
 1. [Загальна оцінка](#1-загальна-оцінка)
-4. [🔵 РЕКОМЕНДАЦІЇ з масштабування](#5--рекомендації-з-масштабування)
 5. [📐 Архітектурні зауваження](#6--архітектурні-зауваження)
 6. [🗺️ План дій (Roadmap)](#7-%EF%B8%8F-план-дій-roadmap)
 
@@ -31,43 +30,6 @@
 
 **Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
-
-### MED-10: Відсутній `ErrorBoundary` для сторінки чату
-
-При помилці завантаження повідомлень або чату — весь додаток "лягає" через глобальний `GlobalErrorBoundary`. Потрібен **локальний** error boundary для окремих маршрутів.
-
----
-
-### MED-11: `useChatStore.ts` — невикористаний store
-
-**Файл:** `src/store/useChatStore.ts`
-
-Файл експортує `useUIStore` з `activeChatId` та `isSidebarOpen`, але:
-- `activeChatId` **не використовується** ніде в коді
-- `isSidebarOpen` **не використовується** — замість нього `ChatLayoutWrapper` має свій локальний `useState`
-
----
-
-### MED-12: `uniqueParticipants` обчислюється на кожен рендер
-
-**Файл:** `src/app/chat/[id]/page.tsx` (рядок 94-145)
-
-Складна IIFE для обчислення `uniqueParticipants` виконується **на кожен рендер** (кожне нове повідомлення, кожне натискання клавіші). Результат ніде не мемоїзується.
-
----
-
-### MED-13: Дублювання інтерфейсу для `OptimisticMessageProps`
-
-**Файл:** `src/components/chat/OptimisticMessage.tsx`
-
-```typescript
-// Оголошується ДВІЧІ (рядок 16 і рядок 88):
-interface OptimisticMessageProps {
-  message: Message & { is_optimistic?: boolean };
-}
-```
-
----
 
 ## 5. 🔵 РЕКОМЕНДАЦІЇ з масштабування
 
@@ -274,48 +236,3 @@ export const env = envSchema.parse(process.env);
 
 ---
 
-## 7. 🗺️ План дій (Roadmap)
-
-### Фаза 1: 🔴 Критичні виправлення (1-2 дні)
-
-- [ ] **CRIT-01**: Санітизація `queryText` в `useSearchUsers`
-- [ ] **CRIT-02**: Видалити `src/lib/supabase.ts`, залишити лише `client.ts` + `server.ts`
-- [ ] **CRIT-03**: Замінити `getSession()` на `getUser()` в middleware або використати `updateSession()` з `lib/supabase/middleware.ts`
-- [ ] **CRIT-04**: Уніфікувати Supabase-клієнти (2 точки входу)
-- [ ] **CRIT-05**: Видалити всі `console.log` — замінити на structured logging
-- [ ] **CRIT-06**: Увімкнути ESLint при build (`ignoreDuringBuilds: false`)
-- [ ] **CRIT-07**: Zod-валідація у server actions
-
-### Фаза 2: 🟠 Серйозні виправлення (3-5 днів)
-
-- [ ] **HIGH-01**: Розбити `useChatHooks.ts` на окремі файли
-- [ ] **HIGH-02**: Видалити `useAttachment.ts`, використовувати `useOptimisticAttachment`
-- [ ] **HIGH-03**: Видалити `components/layout/Sidebar.tsx` (мертвий код)
-- [ ] **HIGH-04**: Виправити `RenderGuard` (або видалити)
-- [ ] **HIGH-05**: Замінити `__NEXT_ROUTER_STATE__` на Zustand store
-- [ ] **HIGH-06**: Перенести `actions/auth.ts` → `lib/auth.ts`
-- [ ] **HIGH-09**: Видалити `wdyr.ts` з production layout імпортів
-- [ ] **HIGH-10**: Уніфікувати `visibilitychange` — один handler
-
-### Фаза 3: 🟡 Оптимізація (1-2 тижні)
-
-- [ ] **MED-01**: Синхронізувати версії React
-- [ ] **MED-05**: Синхронізувати `accept` з `storage.config`
-- [ ] **MED-07**: Мемоїзувати `isRead` обчислення
-- [ ] **MED-08**: Production Dockerfile з multi-stage build
-- [ ] **MED-10**: Error boundaries по маршрутах (`error.tsx`)
-- [ ] **MED-11**: Видалити невикористаний `useChatStore`
-- [ ] **MED-12**: Мемоїзувати `uniqueParticipants` через `useMemo`
-
-### Фаза 4: 🔵 Масштабування (2-4 тижні)
-
-- [ ] **SCALE-01**: Feature-based структура
-- [ ] **SCALE-02**: Data-access шар
-- [ ] **SCALE-03**: Lazy loading важких компонентів
-- [ ] **SCALE-05**: Налаштувати Vitest + компонентні тести
-- [ ] **SCALE-06**: Env validation через Zod
-- [ ] **SCALE-07**: Rate limiting на Server Actions
-
----
-
-> ℹ️ Цей аудит зроблено на основі статичного аналізу коду. Для повної картини рекомендується також провести **runtime профілювання** (React DevTools Profiler), **bundle analysis** (`@next/bundle-analyzer`), та **penetration testing**.
