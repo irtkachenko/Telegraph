@@ -10,7 +10,6 @@
 ## 📋 Зміст
 
 1. [Загальна оцінка](#1-загальна-оцінка)
-3. [🟡 СЕРЕДНІ проблеми](#4--середні-проблеми)
 4. [🔵 РЕКОМЕНДАЦІЇ з масштабування](#5--рекомендації-з-масштабування)
 5. [📐 Архітектурні зауваження](#6--архітектурні-зауваження)
 6. [🗺️ План дій (Roadmap)](#7-%EF%B8%8F-план-дій-roadmap)
@@ -32,79 +31,6 @@
 
 **Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
-
-### MED-05: `accept` у file input не відповідає `storage.config`
-
-**Файл:** `src/components/chat/ChatInput.tsx` (рядок 168)
-
-```html
-<input accept="image/*,.pdf,.docx" />
-```
-
-Але `storage.config.ts` дозволяє `.zip`, `.rar`, `.7z`, `.txt`, `.doc`, `.mp4`, `.mov` тощо — вони тут відсутні.
-
----
-
-### MED-06: `postcss` у `dependencies` замість `devDependencies`
-
-**Файл:** `package.json` (рядок 39)
-
-```json
-"dependencies": {
-  "postcss": "^8.5.6",  // ← Має бути в devDependencies
-  "dotenv": "^17.2.3",  // ← Те саме — використовується лише в drizzle.config
-}
-```
-
----
-
-### MED-07: `isRead` логіка в `ChatPage` — O(n) на кожне повідомлення
-
-**Файл:** `src/app/chat/[id]/page.tsx` (рядок 239-253)
-
-```typescript
-isRead={
-  message.sender_id === user?.id &&
-  !!chat?.recipient_last_read_id &&
-  (() => {
-    const readMessage = messages.find(m => m.id === chat.recipient_last_read_id);
-    // ↑ O(n) пошук для КОЖНОГО повідомлення = O(n²) загальна складність
-    return readMessage ? ... : false;
-  })()
-}
-```
-
-При 1000 повідомлень це виконує **1,000,000 порівнянь**. Обчисліть `readMessageCreatedAt` один раз перед рендером.
-
----
-
-### MED-08: Dockerfile для dev-режиму, не для production
-
-**Файл:** `Dockerfile`
-
-```dockerfile
-CMD ["pnpm", "dev"]  # ← Production Dockerfile запускає dev-сервер!
-```
-
-Відсутні:
-- Multi-stage build
-- `next build` + `next start`
-- `NODE_ENV=production`
-- Оптимізація розміру образу (`standalone` output)
-
----
-
-### MED-09: `docker-compose.yml` не передає env-змінні
-
-**Файл:** `docker-compose.yml`
-
-```yaml
-environment:
-  - NODE_ENV=development
-  # ❌ Де Supabase URL/Key? Де DATABASE_URL?
-```
-
----
 
 ### MED-10: Відсутній `ErrorBoundary` для сторінки чату
 
