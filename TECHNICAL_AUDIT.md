@@ -31,76 +31,7 @@
 **Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
 
-## 5. 🔵 РЕКОМЕНДАЦІЇ з масштабування
 
-### SCALE-01: Feature-based структура проекту
-
-Поточна структура — "за типом файлу" (components/, hooks/, store/). Для масштабування перейти на **feature-based**:
-
-```
-src/
-├── features/
-│   ├── auth/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── actions/
-│   │   └── types.ts
-│   ├── chat/
-│   │   ├── components/
-│   │   │   ├── MessageBubble/
-│   │   │   │   ├── MessageBubble.tsx
-│   │   │   │   ├── MessageBubble.test.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── ChatInput/
-│   │   │   └── MessageMediaGrid/
-│   │   ├── hooks/
-│   │   │   ├── useMessages.ts
-│   │   │   ├── useSendMessage.ts
-│   │   │   ├── useEditMessage.ts
-│   │   │   └── useDeleteMessage.ts
-│   │   ├── actions/
-│   │   ├── store/
-│   │   └── types.ts
-│   ├── contacts/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   └── types.ts
-│   ├── presence/
-│   │   ├── hooks/
-│   │   ├── store/
-│   │   └── components/
-│   └── storage/
-│       ├── hooks/
-│       ├── config/
-│       └── types.ts
-├── shared/
-│   ├── ui/          # Загальні UI-компоненти (Button, Dialog тощо)
-│   ├── lib/         # Утиліти (cn, date-utils)
-│   ├── config/
-│   └── types/
-└── app/             # Next.js App Router
-```
-
----
-
-### SCALE-02: Абстрактний data-access шар
-
-Зараз хуки напряму звертаються до `supabase.from('messages')`. При зміні провайдера (або додаванні кешування) — треба переписати **кожен** хук.
-
-```typescript
-// ❌ Зараз (тісна зв'язаність):
-const { data } = await supabase.from('messages').select('*').eq('chat_id', chatId);
-
-// ✅ Після рефакторингу (loose coupling):
-// src/features/chat/api/messages.api.ts
-export const messagesApi = {
-  getMessages: (chatId: string, cursor?: string) => { ... },
-  sendMessage: (chatId: string, payload: SendMessagePayload) => { ... },
-  deleteMessage: (messageId: string) => { ... },
-};
-```
-
----
 
 ### SCALE-03: Lazy loading для важких компонентів
 

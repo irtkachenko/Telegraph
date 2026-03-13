@@ -3,7 +3,7 @@
 import type { User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { realtimeApi } from '@/api';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
 import type { FullChat, Message } from '@/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -181,14 +181,14 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
   const cleanupChannel = useCallback(() => {
     if (channelRef.current) {
       try {
-        supabase.removeChannel(channelRef.current);
+        realtimeApi.unsubscribe(channelRef.current);
       } catch (error) {
         console.error('Error removing realtime channel:', error);
       } finally {
         channelRef.current = null;
       }
     }
-  }, [chatId]);
+  }, []);
 
   // Set mounted ref for cleanup tracking
   useEffect(() => {
@@ -439,53 +439,10 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
     cleanupChannel();
 
     // Create new channel with chat-specific filtering
-    const channel = supabase.channel(`chat-${chatId}`, {
-      config: {
-        presence: {
-          key: `${user.id}-${chatId}`,
-        },
-      },
-    });
+    const channel = realtimeApi.createChatChannel(chatId);
 
-    // Subscribe to messages for this specific chat only
-    channel
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatId}`, // Server-side filtering - CRITICAL for security and performance
-        },
-        handleMessageInsert,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatId}`, // Server-side filtering
-        },
-        handleMessageUpdate,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'messages',
-          filter: `chat_id=eq.${chatId}`, // Server-side filtering
-        },
-        handleMessageDelete,
-      )
-      .subscribe(async (status: string) => {
-        if (!mountedRef.current) return;
-
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn(`Chat ${chatId} realtime subscription closed:`, status);
-        }
-      });
+    // Subscribe to messages for this specific chat using API
+    realtimeApi.subscribeToMessages(channel, handleMessageInsert);
 
     channelRef.current = channel;
 

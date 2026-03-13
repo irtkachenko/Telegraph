@@ -2,7 +2,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase/client';
+import { userApi } from '@/api';
 
 /**
  * Хук для оновлення статусу "востаннє в мережі".
@@ -13,8 +13,7 @@ export function useUpdateLastSeen() {
   return useMutation({
     mutationFn: async () => {
       if (!user) return;
-      const { error } = await supabase.rpc('update_last_seen');
-      if (error) throw error;
+      return await userApi.updateLastSeen();
     },
     onError: (error) => {
       console.error('Помилка оновлення статусу присутності:', error);

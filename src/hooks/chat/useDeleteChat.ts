@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
+import { chatsApi } from '@/api';
 import type { FullChat } from '@/types';
 
 /**
@@ -15,9 +15,7 @@ export function useDeleteChat() {
 
   return useMutation({
     mutationFn: async (chatId: string) => {
-      const { error } = await supabase.from('chats').delete().eq('id', chatId);
-      if (error) throw error;
-      return chatId;
+      return await chatsApi.deleteChat(chatId);
     },
     onSuccess: (chatId) => {
       queryClient.removeQueries({ queryKey: ['chat', chatId] });

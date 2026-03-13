@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase/client';
+import { realtimeApi } from '@/api';
 import type { RealtimeChannel, RealtimePresenceState } from '@supabase/supabase-js';
 
 interface TypingPresence {
@@ -22,13 +22,11 @@ export function useChatTyping(chatId: string) {
     if (!chatId || !user?.id) return;
 
     if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+      realtimeApi.unsubscribe(channelRef.current);
       channelRef.current = null;
     }
 
-    const channel = supabase.channel(`typing:${chatId}`, {
-      config: { presence: { key: user.id } },
-    });
+    const channel = realtimeApi.createChatChannel(chatId);
 
     channel
       .on('presence', { event: 'sync' }, () => {
@@ -51,7 +49,7 @@ export function useChatTyping(chatId: string) {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        realtimeApi.unsubscribe(channelRef.current);
         channelRef.current = null;
       }
     };

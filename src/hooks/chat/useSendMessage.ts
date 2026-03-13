@@ -3,7 +3,7 @@
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase/client';
+import { messagesApi } from '@/api';
 import type { Attachment, Message } from '@/types';
 
 /**
@@ -25,23 +25,12 @@ export function useSendMessage(chatId: string) {
     }) => {
       if (!user) throw new Error('Ви не авторизовані');
 
-      const { error, data } = await supabase
-        .from('messages')
-        .insert({
-          chat_id: chatId,
-          sender_id: user.id,
-          content,
-          reply_to_id: reply_to_id || null,
-          attachments: attachments || [],
-        })
-        .select('*, reply_to:reply_to_id(*)')
-        .single();
-
-      if (error) {
-        console.error('Помилка відправки:', error.message);
-        throw error;
-      }
-      return data;
+      return await messagesApi.sendMessage(chatId, {
+        sender_id: user.id,
+        content,
+        reply_to_id,
+        attachments,
+      });
     },
 
     onMutate: async (newMessage) => {

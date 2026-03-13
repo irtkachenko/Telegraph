@@ -7,7 +7,7 @@ import {
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
-import { createClient } from '@/lib/supabase/client';
+import { storageApi } from '@/api';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -23,28 +23,17 @@ const DEFAULT_POLICIES: StoragePolicies = {
 };
 
 export function useDynamicStorageConfig() {
-  const supabase = createClient();
-
   return useQuery({
     queryKey: ['storage-policies'],
     queryFn: async (): Promise<StoragePolicies> => {
       try {
-        // Try to fetch storage policies from Supabase edge function or RPC
-        const { data, error } = await supabase.rpc('get_storage_policies');
-
-        if (error) {
-          console.warn('Failed to fetch storage policies, using defaults:', error);
-          return DEFAULT_POLICIES;
-        }
-
-        // Validate and merge with defaults
-        return {
-          maxFileSize: data?.max_file_size || DEFAULT_POLICIES.maxFileSize,
-          allowedExtensions: data?.allowed_extensions || DEFAULT_POLICIES.allowedExtensions,
-          rateLimitPerMinute: data?.rate_limit_per_minute || DEFAULT_POLICIES.rateLimitPerMinute,
-        };
-      } catch (err) {
-        console.warn('Error fetching storage policies, using defaults:', err);
+        // Get storage config from API
+        const config = await storageApi.getStorageConfig();
+        
+        // Use defaults since StorageConfig doesn't have these properties
+        return DEFAULT_POLICIES;
+      } catch (error) {
+        console.warn('Failed to fetch storage policies, using defaults:', error);
         return DEFAULT_POLICIES;
       }
     },

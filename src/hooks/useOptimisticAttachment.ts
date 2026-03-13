@@ -9,7 +9,7 @@ import {
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
-import { createClient } from '@/lib/supabase/client';
+import { storageApi } from '@/api';
 import type { Attachment } from '@/types';
 import { useStorageLimits } from './useDynamicStorageConfig';
 
@@ -24,7 +24,6 @@ export interface OptimisticAttachment extends Attachment {
 export function useOptimisticAttachment(chatId: string) {
   const [attachments, setAttachments] = useState<OptimisticAttachment[]>([]);
   const { user } = useSupabaseAuth();
-  const supabase = createClient();
   const { validateFile } = useStorageLimits();
 
   // Очищення URL-прев'ю при розмонтуванні компонента
@@ -100,34 +99,21 @@ export function useOptimisticAttachment(chatId: string) {
         );
       }, 100);
 
-      const { error } = await supabase.storage.from('attachments').upload(filePath, fileToUpload, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+      // Завантажуємо файл через API
+      const attachment = await storageApi.uploadAttachment(fileToUpload as File, chatId, user!.id);
 
       clearInterval(progressInterval);
 
-      if (error) {
-        // Обробка нашого SQL-тригера на ліміт 10 завантажень
-        if (error.message.toLowerCase().includes('rate limit')) {
-          throw new Error('Ліміт вичерпано: не більше 10 файлів на хвилину.');
-        }
-        throw error;
-      }
-
-      // Отримуємо пряме посилання
-      const { data: publicData } = supabase.storage.from('attachments').getPublicUrl(filePath);
-
       const finalAttachment: Attachment = {
-        id,
-        type: isImage ? 'image' : 'file',
-        url: publicData.publicUrl,
-        metadata: { name: file.name, size: fileToUpload.size },
+        id: attachment.id,
+        type: attachment.type,
+        url: attachment.url,
+        metadata: attachment.metadata,
       };
 
       setAttachments((prev) =>
         prev.map((a) =>
-          a.id === id ? { ...a, url: publicData.publicUrl, uploading: false, progress: 100 } : a,
+          a.id === id ? { ...a, url: attachment.url, uploading: false, progress: 100 } : a,
         ),
       );
 

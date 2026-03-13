@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { createClient } from '@/lib/supabase/client';
+import { storageApi } from '@/api';
 import { fileUploadSchema, singleFileSchema } from '@/lib/validations/chat';
 import type { Attachment } from '@/types';
 
@@ -30,7 +30,6 @@ export interface PendingAttachment extends SelectedFile {
 export function useLocalFileSelection() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const { user } = useSupabaseAuth();
-  const supabase = createClient();
 
   // Clean up preview URLs when component unmounts
   useEffect(() => {
@@ -163,28 +162,19 @@ export function useLocalFileSelection() {
           }
         }
 
-        // Upload to Supabase Storage
-        const { error } = await supabase.storage
-          .from('attachments')
-          .upload(filePath, fileToUpload, {
-            cacheControl: '3600',
-            upsert: false,
-          });
+        // Upload to Supabase Storage через API
+        await storageApi.uploadFile('attachments', filePath, fileToUpload as File, {
+          cacheControl: '3600',
+          upsert: false,
+        });
 
-        if (error) {
-          if (error.message.toLowerCase().includes('rate limit')) {
-            throw new Error('Rate limit exceeded: maximum 10 files per minute');
-          }
-          throw error;
-        }
-
-        // Get public URL
-        const { data: publicData } = supabase.storage.from('attachments').getPublicUrl(filePath);
+        // Get public URL через API
+        const publicUrl = await storageApi.getPublicUrl('attachments', filePath);
 
         const attachment: Attachment = {
           id: selectedFile.id,
           type: selectedFile.type,
-          url: publicData.publicUrl,
+          url: publicUrl,
           metadata: {
             ...selectedFile.metadata,
             size: fileToUpload.size, // Use actual uploaded size

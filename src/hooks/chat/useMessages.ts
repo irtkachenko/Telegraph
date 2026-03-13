@@ -3,7 +3,7 @@
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase/client';
+import { messagesApi } from '@/api';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
 
@@ -26,26 +26,7 @@ export function useMessages(chatId: string) {
     queryFn: async ({ pageParam }: { pageParam?: string }) => {
       if (!chatId) return [];
 
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*, reply_to:reply_to_id(*), "users":sender_id(id, name, image), updated_at')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: false })
-        .limit(50)
-        .lt('created_at', pageParam || '9999-12-31');
-
-      if (error) {
-        console.error('Помилка завантаження повідомлень:', error.message);
-        throw error;
-      }
-
-      const normalizedData = (data as unknown as Message[]).map((msg) => ({
-        ...msg,
-        attachments: msg.attachments || [],
-      }));
-
-      // Повертаємо в правильному порядку для Virtuoso
-      return normalizedData.reverse();
+      return await messagesApi.getMessages(chatId, pageParam);
     },
     initialPageParam: undefined,
     getPreviousPageParam: (firstPage): string | undefined => {
