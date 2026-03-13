@@ -2,7 +2,7 @@
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
@@ -15,7 +15,7 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
   const renderCount = useRef(0);
   const startTime = useRef<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Initialize startTime on first render
     if (startTime.current === null) {
       startTime.current = Date.now();
@@ -41,11 +41,14 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
       });
 
       // Робимо жорсткий редірект, щоб розірвати цикл
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         window.location.replace('/');
       }, 1500);
+
+      // Очищення таймауту при анмаунті
+      return () => clearTimeout(timeoutId);
     }
-  }); // Масив залежностей порожній (відсутній), щоб спрацьовувати на кожен рендер
+  }); // Run on every render to detect infinite loops
 
   return <>{children}</>;
 }

@@ -49,28 +49,6 @@
 
 ---
 
-### HIGH-03: Мертвий код — `src/components/layout/Sidebar.tsx`
-
-**Файли:**
-- `components/layout/Sidebar.tsx` — мертвий код з посиланнями на `/contacts`, `/profile`, `/settings` (ці маршрути **не існують**)
-- `components/sidebar/Sidebar.tsx` — використовується
-
----
-
-### HIGH-04: Витік пам'яті у `useEffect` без масиву залежностей
-
-**Файл:** `src/components/Providers.tsx` (рядок 18-48)
-
-```typescript
-useEffect(() => {
-  renderCount.current += 1;
-  // ...
-}); // ← Без масиву залежностей — спрацьовує КОЖЕН рендер
-```
-
-`RenderGuard` запускає `useEffect` на **кожен рендер** — в поєднанні з `toast` та `setTimeout`, це саме по собі може **спричинити** проблему, яку він покликаний вирішити.
-
----
 
 ### HIGH-05: `(window as any).__NEXT_ROUTER_STATE__` — undocumented API
 
