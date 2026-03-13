@@ -6,10 +6,8 @@ import { toast } from 'sonner';
 let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
-  // Only create singleton on client-side to prevent SSR security risks
-  if (typeof window !== 'undefined' && client) {
-    return client;
-  }
+  // Повертаємо існуючий клієнт, якщо він уже створений у браузері
+  if (typeof window !== 'undefined' && client) return client;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -17,56 +15,31 @@ export function createClient() {
   const newClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     global: {
       fetch: async (url, options) => {
+        // Перевіряємо, чи ми хочемо вимкнути тост для цього конкретного запиту
+        const skipToast = options?.headers && (options.headers as any)['x-skip-toast'] === 'true';
+
         const response = await fetch(url, options);
 
-        // Only handle errors, let successful responses pass through naturally
-        if (!response.ok) {
-          // Silent handling for 401 Unauthorized (Auth listener handles redirects)
-          if (response.status === 401) {
-            return response;
-          }
+        if (!response.ok && !skipToast) {
+          if (response.status === 401) return response;
 
-          // Robust error parsing
-          let errorMessage = response.statusText;
           try {
-            const text = await response.clone().text();
-            if (text) {
-              const errorBody = JSON.parse(text);
-              errorMessage =
-                errorBody?.message ||
-                errorBody?.error_description ||
-                errorBody?.msg ||
-                errorMessage;
-            }
-          } catch {
-            // If body parsing fails, stick to statusText or default
-          }
+            const errorData = await response.clone().json();
+            const message = errorData?.message || errorData?.error_description || response.statusText;
 
-          // Trigger Toast for non-401 errors
-          if (response.status >= 500) {
-            toast.error(`Server Error (${response.status})`, {
-              description: 'Something went wrong on our end. Please try again later.',
+            toast.error(response.status >= 500 ? 'Помилка сервера' : 'Помилка запиту', {
+              description: message,
             });
-          } else if (response.status >= 400) {
-            toast.error('Request Failed', {
-              description: errorMessage || 'Unable to complete this action.',
-            });
+          } catch {
+            toast.error(`Помилка ${response.status}`, { description: response.statusText });
           }
         }
 
-        // Return response as-is for both success and error cases
         return response;
       },
     },
   });
 
-  // Only cache client on client-side
-  if (typeof window !== 'undefined') {
-    client = newClient;
-  }
-
+  if (typeof window !== 'undefined') client = newClient;
   return newClient;
 }
-
-// Export the client directly for compatibility, but ensure it's SSR-safe
-export const supabase = createClient();

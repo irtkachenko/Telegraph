@@ -1,79 +1,57 @@
-import { type CookieOptions, createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 import { isStaticAsset } from '@/config/storage.config';
+import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
-  // Check if this is a static asset and bypass middleware if so
+  // 1. Пропускаємо статичні файли (картинки, шрифти тощо)
   if (isStaticAsset(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: '', ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value: '', ...options });
-        },
-      },
-    },
-  );
-
-  // Використовуємо try/catch, щоб Middleware не "падав", якщо з сесією щось не так
+  // 2. Створюємо клієнт та отримуємо початкову відповідь з куками
+  const { supabase, supabaseResponse } = await createMiddlewareClient(request);
+  
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
+    // ВАЖЛИВО: Отримуємо юзера. Це оновлює токен у куках, якщо він прострочений
+    const { data: { user } } = await supabase.auth.getUser();
 
     const url = request.nextUrl.clone();
     const path = url.pathname;
 
+    // Визначаємо публічні маршрути
     const isPublicPage = path === '/' || path.startsWith('/auth');
 
-    // Якщо юзера немає і сторінка захищена — на головну
+    // КЕЙС 1: Юзер НЕ залогінений, але намагається зайти в чат
     if (!user && !isPublicPage) {
       url.pathname = '/';
-      return NextResponse.redirect(url);
+      const redirectResponse = NextResponse.redirect(url);
+      // Копіюємо оновлені куки в редирект, щоб не розлогінювати юзера при помилках
+      supabaseResponse.cookies.getAll().forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
+      return redirectResponse;
     }
 
-    // Якщо юзер вже є і він на сторінці логіну — в чат
+    // КЕЙС 2: Юзер ВЖЕ залогінений і зайшов на публічну сторінку (/, /auth/login тощо)
+    // Тепер ми перекидаємо його на /chat
     if (user && isPublicPage) {
       url.pathname = '/chat';
-      return NextResponse.redirect(url);
+      const redirectResponse = NextResponse.redirect(url);
+      // ОБОВ'ЯЗКОВО копіюємо куки, інакше сесія "відпаде" після редиректу
+      supabaseResponse.cookies.getAll().forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
+      return redirectResponse;
     }
+
   } catch (e) {
-    // Якщо сталася будь-яка помилка авторизації (сесія біта тощо)
-    // Просто кидаємо на головну, якщо ми не на публічній сторінці
-    const url = request.nextUrl.clone();
-    if (url.pathname !== '/' && !url.pathname.startsWith('/auth')) {
-      url.pathname = '/';
-      return NextResponse.redirect(url);
+    // Якщо сесія пошкоджена — скидаємо на головну
+    if (request.nextUrl.pathname !== '/' && !request.nextUrl.pathname.startsWith('/auth')) {
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
-  return response;
+  // Якщо редиректи не потрібні — повертаємо відповідь від Supabase (з куками)
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // Оновлений matcher: ігноруємо внутрішні запити Next.js та статику
+  matcher: ['/((?!api|_next/static|_next/image|_next/data|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };
