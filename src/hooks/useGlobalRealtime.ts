@@ -5,14 +5,9 @@ import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
+import { useUIStore } from '@/store/useChatStore';
 import type { FullChat, Message } from '@/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-
-interface NextRouterState {
-  query?: {
-    chatId?: string;
-  };
-}
 
 interface RealtimePayload<T = Record<string, unknown>> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -83,13 +78,12 @@ function messageExistsInCache(
   return !!existingByContent;
 }
 
-// Helper function to get active chat ID from query cache
+// Helper function to get active chat ID from Zustand store
 function getActiveChatId(queryClient: ReturnType<typeof useQueryClient>): string | null {
-  // Try to get the current active chat from the router or global state
-  // This is a placeholder - you might need to adjust based on your routing/state management
-  const routerState = (window as unknown as { __NEXT_ROUTER_STATE__?: NextRouterState }).__NEXT_ROUTER_STATE__;
-  if (routerState?.query?.chatId) {
-    return routerState.query.chatId;
+  // Get active chat from Zustand store
+  const activeChatId = useUIStore.getState().activeChatId;
+  if (activeChatId) {
+    return activeChatId;
   }
 
   // Fallback: check if there's a recently accessed messages query

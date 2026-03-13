@@ -17,13 +17,13 @@ const markAsReadInputSchema = z.object({
 });
 
 /**
- * Отримує поточного користувача із Supabase SSR та синхронізує його з нашою БД Drizzle.
+ * Отримує поточного користувача із Supabase SSR.
  */
 async function getCurrentUser() {
   try {
     const supabase = await createClient();
 
-    // 1. Отримуємо юзера (getUser надійніший для безпеки на сервері)
+    // Отримуємо юзера (getUser надійніший для безпеки на сервері)
     const {
       data: { user },
       error: userError,
@@ -33,39 +33,8 @@ async function getCurrentUser() {
       return null;
     }
 
-    // Безпечне отримання метаданих (додав додаткові перевірки)
-    const userName =
-      user.user_metadata?.full_name ||
-      user.user_metadata?.name ||
-      user.email?.split('@')[0] ||
-      'Користувач';
-
-    const userImage = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-
-    // 3. Синхронізація з Drizzle
-    const [dbUser] = await db
-      .insert(users)
-      .values({
-        id: user.id,
-        email: user.email ?? '',
-        name: userName,
-        image: userImage,
-        last_seen: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          name: userName,
-          image: userImage,
-          last_seen: new Date(),
-        },
-      })
-      .returning();
-
-    return dbUser;
+    return user;
   } catch (err) {
-    // Якщо прилетить той самий TypeError про "string", ми його зловимо тут
-    // і не дамо всьому серверу "впасти"
     console.error('Critical error in getCurrentUser:', err);
     return null;
   }

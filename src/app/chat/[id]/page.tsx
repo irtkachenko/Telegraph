@@ -98,26 +98,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   })();
 
   // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ ---
-  const uniqueParticipants = (() => {
+  const uniqueParticipants = useMemo(() => {
     const participants: User[] = [];
 
     // Add current user
     if (user) {
-      // Handle both Supabase Auth user and database user types
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const authUser = user as any; // Temporary cast to access auth properties
-      participants.push({
-        id: user.id,
-        name:
-          authUser.user_metadata?.name ||
-          authUser.name ||
-          user.email?.split('@')[0] ||
-          'Unknown User',
-        email: user.email || '',
-        email_verified: authUser.email_verified || null,
-        image: authUser.user_metadata?.avatar_url || authUser.image || null,
-        last_seen: authUser.last_seen || null,
-      });
+      participants.push(user);
     }
 
     // Add chat participants from chat details
@@ -136,12 +122,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         if (message.user) {
           participants.push({
             id: message.sender_id,
-            name: message.user.name,
-            email: '', // Required field, use empty string as fallback
-            email_verified: null,
-            image: message.user.image,
+            email: '',
+            email_confirmed_at: undefined,
+            phone: undefined,
+            user_metadata: {},
+            name: message.user.name || null,
+            image: message.user.image || null,
             last_seen: null,
-          } as User);
+            is_online: false,
+            display_name: message.user.name || 'Unknown User',
+          });
         } else if (message.sender) {
           participants.push(message.sender);
         }
@@ -149,7 +139,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     });
 
     return participants;
-  })();
+  }, [user, chat?.participants, messages]);
 
   if (isChatLoading || (isMessagesLoading && !messages.length)) {
     return (

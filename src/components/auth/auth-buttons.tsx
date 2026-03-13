@@ -1,7 +1,7 @@
 'use client';
 
 import { LogIn, LogOut } from 'lucide-react';
-import { handleSignIn, handleSignOut } from '@/actions/auth';
+import { handleSignIn, handleSignOut } from '@/lib/auth';
 
 export function SignInButton() {
   return (

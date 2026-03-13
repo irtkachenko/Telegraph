@@ -34,67 +34,6 @@
 **Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
 
-
-### HIGH-02: Дублювання хуків `useAttachment` / `useOptimisticAttachment`
-
-**Файли:**
-- `src/hooks/useAttachment.ts` (130 рядків)
-- `src/hooks/useOptimisticAttachment.ts` (195 рядків)
-
-Обидва хуки виконують **ідентичну логіку**: завантаження файлу, стиснення зображення, створення preview URL, обробка помилок. `useOptimisticAttachment` — розширена версія `useAttachment` з прогрес-баром.
-
-> ℹ️ `ChatInput.tsx` використовує `useAttachment`, не `useOptimisticAttachment` — тобто більш просунута версія з прогрес-баром **взагалі не використовується**!
-
-**Виправлення:** Видалити `useAttachment.ts`, використовувати лише `useOptimisticAttachment.ts`.
-
----
-
-
-### HIGH-05: `(window as any).__NEXT_ROUTER_STATE__` — undocumented API
-
-**Файл:** `src/hooks/useGlobalRealtime.ts` (рядок 83)
-
-```typescript
-const routerState = (window as any).__NEXT_ROUTER_STATE__;
-```
-
-Це **внутрішній implementation detail** Next.js, який може зникнути в будь-якому оновленні. Використовується для визначення "активного чату".
-
-**Виправлення:** Використати `useChatStore` (Zustand), який уже є в проекті, але **не з'єднаний** з цією логікою.
-
----
-
-### HIGH-06: `actions/auth.ts` має `'use client'` замість `'use server'`
-
-**Файл:** `src/actions/auth.ts` (рядок 1)
-
-```typescript
-'use client'; // ❌ Файл у папці actions з директивою CLIENT
-
-export async function handleSignIn() { ... }
-export async function handleSignOut() { ... }
-```
-
-Файл знаходиться в `actions/` (серверна конвенція), але має `'use client'` директиву. Це **не** server actions — це клієнтські функції, які помилково лежать в папці для серверних дій.
-
-**Виправлення:** Перенести в `src/lib/auth.ts` або `src/utils/auth.ts`.
-
----
-
-### HIGH-07: `any` типи у критичних місцях
-
-**Файли з `any`:**
-
-| Файл | Рядок | Контекст |
-|---|---|---|
-| `useGlobalRealtime.ts` | 174 | `channelRef = useRef<any>(null)` — Realtime channel |
-| `chat-actions.ts` | 134 | `const updateData: any = {}` — Server Action DB update |
-| `chat/[id]/page.tsx` | 101 | `const authUser = user as any` — Auth user casting |
-| `OptimisticMessage.tsx` | 94 | `(att: any) => att.uploading` — Attachment type assertion |
-| `useGlobalRealtime.ts` | 126 | `T extends (...args: any[])` — Throttle utility |
-
----
-
 ### HIGH-08: Неконтрольоване розповсюдження `queryClient.invalidateQueries`
 
 Багато мутацій роблять `invalidateQueries` **після** оптимістичного оновлення, що спричиняє подвійне оновлення UI та "мигання" даних:

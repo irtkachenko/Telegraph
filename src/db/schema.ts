@@ -16,16 +16,50 @@ export const users = pgTable(
   'user',
   {
     id: uuid('id').primaryKey(),
-    name: text('name'),
     email: text('email').notNull().unique(),
-    email_verified: timestamp('emailVerified', { mode: 'date' }),
+    name: text('name'),
     image: text('image'),
     last_seen: timestamp('last_seen', { mode: 'date' }).defaultNow(),
+    email_verified: timestamp('emailVerified', { mode: 'date' }),
+    
+    // Додаткові поля для кращого UX
+    is_online: boolean('is_online').default(false),
+    status: text('status').default('offline'), // 'online', 'away', 'offline'
+    status_message: text('status_message'),
+    
+    // OAuth дані для кешування
+    provider: text('provider'), // 'google', 'github', 'email'
+    provider_id: text('provider_id'),
+    
+    // Налаштування
+    preferences: jsonb('preferences').$type<UserPreferences>(),
+    theme: text('theme').default('system'), // 'light', 'dark', 'system'
+    
+    created_at: timestamp('created_at').defaultNow(),
+    updated_at: timestamp('updated_at').defaultNow(),
   },
   (table) => ({
-    emailIdx: index('idx_user_email').on(table.email), // Для швидкого пошуку контактів
+    emailIdx: index('idx_user_email').on(table.email),
+    providerIdx: index('idx_user_provider').on(table.provider, table.provider_id),
+    lastSeenIdx: index('idx_user_last_seen').on(table.last_seen),
   }),
 );
+
+interface UserPreferences {
+  notifications: {
+    email: boolean;
+    push: boolean;
+    sound: boolean;
+  };
+  privacy: {
+    show_online_status: boolean;
+    show_last_seen: boolean;
+  };
+  chat: {
+    enter_to_send: boolean;
+    show_timestamps: boolean;
+  };
+}
 
 // --- ТАБЛИЦЯ ЧАТІВ ---
 export const chats = pgTable(

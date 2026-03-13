@@ -4,7 +4,7 @@ import type { User, RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -177,7 +177,12 @@ export function usePresenceSubscription() {
   const managerRef = useRef<PresenceManager | null>(null);
 
   // Store the ref globally for cleanup
-  globalManagerRef = managerRef;
+  useEffect(() => {
+    globalManagerRef.current = managerRef.current;
+    return () => {
+      globalManagerRef.current = null;
+    };
+  }, []);
 
   const subscribe = (user: User | null) => {
     if (!user?.id) {
@@ -232,7 +237,7 @@ export function usePresenceSubscription() {
 }
 
 // Global cleanup function
-let globalManagerRef: { current: PresenceManager | null } = { current: null };
+const globalManagerRef: { current: PresenceManager | null } = { current: null };
 
 function cleanupPresence(): void {
   if (!globalManagerRef.current) return;

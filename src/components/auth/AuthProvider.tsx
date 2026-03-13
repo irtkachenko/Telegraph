@@ -1,42 +1,76 @@
 'use client';
 
-import type { AuthChangeEvent, Session, SupabaseClient, User } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
 import { createClient } from '@/lib/supabase/client';
+import { AppUser, UserUtils } from '@/types/auth';
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
+  supabaseUser: SupabaseUser | null;
   loading: boolean;
   supabase: SupabaseClient;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  supabaseUser: null,
   loading: true,
   supabase: {} as SupabaseClient,
+  refreshUser: async () => {},
 });
 
 export const useSupabaseAuth = () => useContext(AuthContext);
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [supabase] = useState(() => createClient());
 
-  // Memoize the auth state change handler to prevent unnecessary re-renders
-  const handleAuthStateChange = useCallback((event: AuthChangeEvent, session: Session | null) => {
-    // Only update loading state on initial auth events
+  // Функція для нормалізації користувача (без БД доступу)
+  const normalizeUser = useCallback((supabaseUser: SupabaseUser | null) => {
+    if (!supabaseUser) {
+      setUser(null);
+      return;
+    }
+
+    // Нормалізувати користувача без БД даних
+    const normalizedUser = UserUtils.normalize(supabaseUser, undefined);
+    setUser(normalizedUser);
+  }, []);
+
+  // Функція для оновлення даних користувача
+  const refreshUser = useCallback(async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (!error && user) {
+      setSupabaseUser(user);
+      normalizeUser(user);
+    }
+  }, [supabase, normalizeUser]);
+
+  // Обробник зміни стану автентифікації
+  const handleAuthStateChange = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
     if (event === 'INITIAL_SESSION') {
       setLoading(false);
     }
-    setUser(session?.user ?? null);
-  }, []);
+    
+    const currentUser = session?.user ?? null;
+    setSupabaseUser(currentUser);
+    
+    if (currentUser) {
+      normalizeUser(currentUser);
+    } else {
+      setUser(null);
+    }
+  }, [normalizeUser]);
 
+  // Ініціалізація
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
     const initializeAuth = async () => {
       try {
         const {
@@ -50,7 +84,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           console.error('Error getting initial user:', error);
           setLoading(false);
         } else {
-          // Ми передаємо об'єкт схожий на сесію для сумісності з існуючим хендлером
           handleAuthStateChange('INITIAL_SESSION', user ? ({ user } as Session) : null);
         }
       } catch (error) {
@@ -74,13 +107,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     };
   }, [supabase, handleAuthStateChange]);
 
-  // Initialize realtime only when user is available
-  useGlobalRealtime(user);
+  // Realtime для presence
+  useGlobalRealtime(supabaseUser);
 
   const value: AuthContextType = {
     user,
+    supabaseUser,
     loading,
     supabase,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

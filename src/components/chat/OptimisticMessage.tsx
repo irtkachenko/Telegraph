@@ -13,6 +13,11 @@ interface OptimisticAttachment extends Attachment {
   previewUrl?: string;
 }
 
+// Type guard для безпечної роботи
+function isOptimisticAttachment(att: Attachment): att is OptimisticAttachment {
+  return 'uploading' in att;
+}
+
 interface OptimisticMessageProps {
   message: Message & { is_optimistic?: boolean };
 }
@@ -95,8 +100,10 @@ interface OptimisticMessageProps {
 
 export function OptimisticMessage({ message }: OptimisticMessageProps) {
   const isOptimistic = message.is_optimistic;
-  const hasUploadingAttachments = message.attachments?.some((att: OptimisticAttachment) => att.uploading);
-  const hasFailedAttachments = message.attachments?.some((att: OptimisticAttachment) => att.error);
+  const hasUploadingAttachments = message.attachments?.some(isOptimisticAttachment);
+  const hasFailedAttachments = message.attachments?.some((att) => 
+    isOptimisticAttachment(att) && !!att.error
+  );
 
   return (
     <div
@@ -181,7 +188,7 @@ export function OptimisticMessage({ message }: OptimisticMessageProps) {
           <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-500/10 p-2 rounded">
             <Loader2 className="w-3 h-3 animate-spin" />
             <span>
-              Uploading {message.attachments?.filter((att: OptimisticAttachment) => att.uploading).length} file(s)...
+              Uploading {message.attachments?.filter(isOptimisticAttachment).length} file(s)...
             </span>
           </div>
         )}
