@@ -18,10 +18,6 @@ function isOptimisticAttachment(att: Attachment): att is OptimisticAttachment {
   return 'uploading' in att;
 }
 
-interface OptimisticMessageProps {
-  message: Message & { is_optimistic?: boolean };
-}
-
 const OptimisticAttachmentComponent = memo(
   ({ attachment }: { attachment: OptimisticAttachment }) => {
     const isImage = attachment.type === 'image';

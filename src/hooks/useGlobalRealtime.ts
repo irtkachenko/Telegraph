@@ -5,7 +5,6 @@ import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
-import { useUIStore } from '@/store/useChatStore';
 import type { FullChat, Message } from '@/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -78,12 +77,15 @@ function messageExistsInCache(
   return !!existingByContent;
 }
 
-// Helper function to get active chat ID from Zustand store
+// Helper function to get active chat ID from URL or query cache
 function getActiveChatId(queryClient: ReturnType<typeof useQueryClient>): string | null {
-  // Get active chat from Zustand store
-  const activeChatId = useUIStore.getState().activeChatId;
-  if (activeChatId) {
-    return activeChatId;
+  // Try to get chat ID from current URL pathname
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    const chatMatch = pathname.match(/^\/chat\/([^\/]+)$/);
+    if (chatMatch && chatMatch[1]) {
+      return chatMatch[1];
+    }
   }
 
   // Fallback: check if there's a recently accessed messages query
