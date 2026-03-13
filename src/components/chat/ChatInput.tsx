@@ -5,7 +5,7 @@ import { Paperclip, Send } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage, useSendMessage } from '@/hooks/chat';
-import { useAttachment } from '@/hooks/useAttachment';
+import { useOptimisticAttachment } from '@/hooks/useOptimisticAttachment';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
 import ComposerAddons from './ComposerAddons';
@@ -32,7 +32,7 @@ export default function ChatInput({
   const { user } = useSupabaseAuth(); // Ensure user is available if needed, though useSendMessage handles it
   const [content, setContent] = useState('');
   const { attachments, uploadFile, removeAttachment, clearAttachments, isUploading } =
-    useAttachment(chatId);
+    useOptimisticAttachment(chatId);
 
   // Використовуємо оновлений хук з Optimistic UI
   const sendMessage = useSendMessage(chatId);

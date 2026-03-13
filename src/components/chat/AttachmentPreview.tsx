@@ -2,10 +2,10 @@
 
 import { FileIcon, Loader2, X } from 'lucide-react';
 import Image from 'next/image';
-import type { PendingAttachment } from '@/hooks/useAttachment';
+import type { OptimisticAttachment } from '@/hooks/useOptimisticAttachment';
 
 interface AttachmentPreviewProps {
-  attachment: PendingAttachment;
+  attachment: OptimisticAttachment;
   onRemove: (id: string) => void;
 }
 

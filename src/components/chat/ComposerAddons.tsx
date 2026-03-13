@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import type { PendingAttachment } from '@/hooks/useAttachment';
+import type { OptimisticAttachment } from '@/hooks/useOptimisticAttachment';
 import type { Message } from '@/types';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -10,7 +10,7 @@ interface ComposerAddonsProps {
   onReplyCancel?: () => void;
   editingMessage?: Message | null;
   onEditCancel?: () => void;
-  attachments: PendingAttachment[];
+  attachments: OptimisticAttachment[];
   onAttachmentRemove: (id: string) => void;
   otherParticipantName?: string;
 }
