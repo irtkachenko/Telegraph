@@ -13,7 +13,7 @@ import type { Attachment } from '@/types';
 
 // --- ТАБЛИЦЯ КОРИСТУВАЧІВ ---
 export const users = pgTable(
-  'user',
+  'users',
   {
     id: uuid('id').primaryKey(),
     email: text('email').notNull().unique(),
