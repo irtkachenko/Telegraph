@@ -108,14 +108,6 @@ function setupChannel(
         // Use debounced update to prevent render storms
         debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user' }, () => {
-        // Invalidate contacts queries when users change
-        queryClient.invalidateQueries({ queryKey: ['contacts'], exact: false });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
-        // Invalidate chats queries when chats change
-        queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
-      })
       .subscribe(async (status: string) => {
         switch (status) {
           case 'SUBSCRIBED':

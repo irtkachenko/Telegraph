@@ -3,6 +3,12 @@ import { supabase } from '@/lib/supabase/client';
 
 export const realtimeApi = {
   /**
+   * Створення глобального каналу для повідомлень
+   */
+  createMessagesChannel: (): RealtimeChannel => {
+    return supabase.channel('messages:global');
+  },
+  /**
    * Створення каналу для чату
    */
   createChatChannel: (chatId: string): RealtimeChannel => {
@@ -20,6 +26,21 @@ export const realtimeApi = {
         schema: 'public',
         table: 'messages',
         filter: `chat_id=eq.${channel.topic?.split(':')[1]}`,
+      },
+      callback,
+    );
+  },
+
+  /**
+   * Глобальна підписка на всі повідомлення (RLS фільтрує доступні рядки)
+   */
+  subscribeToAllMessages: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+    return channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
       },
       callback,
     );

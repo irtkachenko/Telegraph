@@ -2,6 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { useChatsRealtime } from '@/hooks/chat';
 import Navbar from './Navbar';
 
 interface ChatLayoutWrapperProps {
@@ -16,6 +18,8 @@ interface ChatLayoutWrapperProps {
 }
 
 export default function ChatLayoutWrapper({ children, sidebar, user }: ChatLayoutWrapperProps) {
+  const { supabaseUser } = useSupabaseAuth();
+  useChatsRealtime(supabaseUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [prevPathname, setPrevPathname] = useState<string | null>(null);
   const pathname = usePathname();

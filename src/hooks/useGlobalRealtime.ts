@@ -190,7 +190,7 @@ function createThrottle(
   };
 }
 
-// Global hook for user presence and chat list updates (no message subscriptions)
+// Global hook for user presence only (no chat/message subscriptions)
 export function useGlobalRealtime(user: User | null) {
   const queryClient = useQueryClient();
   const { subscribe, unsubscribe } = usePresenceSubscription();
@@ -288,7 +288,10 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
       quotedMessage = allMessages.find((m) => m.id === newMessage.reply_to_id);
       if (!quotedMessage) {
         // Search in other chat caches if not found in current chat
-        const allChats = queryClient.getQueryData(['chats']) as FullChat[] | undefined;
+        const chatsData = queryClient.getQueryData(['chats']) as
+          | InfiniteData<FullChat[]>
+          | undefined;
+        const allChats = chatsData?.pages.flat() || [];
         if (allChats) {
           for (const chat of allChats) {
             const chatCache = queryClient.getQueryData(['messages', chat.id]) as
@@ -351,20 +354,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
       },
     );
 
-    // Update chats cache manually instead of invalidating to prevent pagination conflicts
-    queryClient.setQueryData(['chats'], (oldChats: FullChat[] | undefined) => {
-      if (!oldChats || !mountedRef.current) return oldChats;
-
-      return oldChats.map((chat) => {
-        if (chat.id !== chatId) return chat;
-
-        // Update the chat's latest message preview
-        return {
-          ...chat,
-          messages: [enhancedMessage as unknown as Message],
-        };
-      });
-    });
+    // Chats list updates are handled globally in useChatsRealtime
 
     // If this is not the active chat, we might want to show a notification
     // This is where you could integrate with a notification system
@@ -455,21 +445,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
       },
     );
 
-    // Also update the chats cache to reflect the latest message change
-    queryClient.setQueryData(['chats'], (oldChats: FullChat[] | undefined) => {
-      if (!oldChats || !mountedRef.current) return oldChats;
-
-      return oldChats.map((chat) => {
-        if (chat.id !== chatId) return chat;
-
-        const updatedMessages = chat.messages?.filter((m: Message) => m.id !== deletedId) || [];
-
-        return {
-          ...chat,
-          messages: updatedMessages,
-        };
-      });
-    });
+    // Chats list updates are handled globally in useChatsRealtime
   };
 
   useEffect(() => {

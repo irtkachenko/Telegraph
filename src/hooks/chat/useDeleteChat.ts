@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { chatsApi } from '@/api';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
+import type { InfiniteData } from '@tanstack/react-query';
+import { mapChatsInfinite } from './chats-cache';
 import type { FullChat } from '@/types';
 
 /**
@@ -23,10 +25,9 @@ export function useDeleteChat() {
       queryClient.removeQueries({ queryKey: ['chat', chatId] });
       queryClient.removeQueries({ queryKey: ['messages', chatId] });
 
-      queryClient.setQueryData(['chats'], (old: FullChat[] | undefined) => {
-        if (!old) return old;
-        return old.filter((chat) => chat.id !== chatId);
-      });
+      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+        mapChatsInfinite(old, (chat) => (chat.id === chatId ? null : chat)),
+      );
 
       toast.success('Чат видалено');
       router.push('/chat');

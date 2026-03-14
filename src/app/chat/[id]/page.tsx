@@ -17,6 +17,7 @@ import {
   useMessages,
   useScrollToMessage,
 } from '@/hooks/chat';
+import { useChatRealtime } from '@/hooks/useGlobalRealtime';
 import { usePresence } from '@/hooks/user';
 import { formatRelativeTime, getSafeTimestamp } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
@@ -24,7 +25,7 @@ import type { Message, User } from '@/types';
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useSupabaseAuth();
+  const { user, supabaseUser } = useSupabaseAuth();
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
   const {
@@ -36,6 +37,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } = useMessages(id);
 
   const { isTyping: typingUsers, setTyping } = useChatTyping(id);
+  useChatRealtime(id, supabaseUser);
   const messages = messagesData?.pages.flat() || [];
   const { onlineUsers } = usePresence();
   const deleteMessage = useDeleteMessage(id);

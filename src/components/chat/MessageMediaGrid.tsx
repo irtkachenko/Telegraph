@@ -2,7 +2,7 @@
 
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { isMediaType, storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,31 @@ interface MessageMediaGridProps {
 
 interface AttachmentWithUrl extends Attachment {
   processedUrl?: string;
+}
+
+type StorageRef = { bucket: string; path: string };
+
+function extractStorageRef(rawUrl: string): StorageRef | null {
+  if (!rawUrl) return null;
+
+  // Normalize URL (strip query params for parsing)
+  const url = rawUrl.split('?')[0] || rawUrl;
+
+  // Match Supabase storage URLs (public or signed)
+  const supabaseMatch = url.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/);
+  if (supabaseMatch) {
+    const [, bucket, path] = supabaseMatch;
+    return { bucket, path: decodeURIComponent(path) };
+  }
+
+  // Match bucket/path style (e.g., attachments/<path>)
+  const bucketName = storageConfig.buckets.attachments.name;
+  const normalized = url.startsWith('/') ? url.slice(1) : url;
+  if (normalized.startsWith(`${bucketName}/`)) {
+    return { bucket: bucketName, path: normalized.slice(bucketName.length + 1) };
+  }
+
+  return null;
 }
 
 const MediaPlaceholder = ({ reason = 'deleted' }: { reason?: 'deleted' | 'error' }) => {
@@ -37,6 +62,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
   const [processedItems, setProcessedItems] = useState<AttachmentWithUrl[]>([]);
   const { getUrl, isLoading: isStorageLoading } = useStorageUrl();
+  const processedCacheRef = useRef<Map<string, string>>(new Map());
+  const failedCacheRef = useRef<Set<string>>(new Set());
 
   // Process attachment URLs to handle private storage
   useEffect(() => {
@@ -48,25 +75,35 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
       const processed = await Promise.all(
         items.map(async (item) => {
+          const cacheKey = `${item.id}:${item.url}`;
+          const cached = processedCacheRef.current.get(cacheKey);
+          if (cached) {
+            return { ...item, processedUrl: cached };
+          }
+          if (failedCacheRef.current.has(cacheKey)) {
+            return { ...item, processedUrl: item.url };
+          }
+
           // Skip if already processed or if URL is already a signed URL
           if (item.url.includes('?token=')) {
             return { ...item, processedUrl: item.url };
           }
 
           try {
-            // Extract bucket and path from URL if it's a Supabase storage URL
-            const urlMatch = item.url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
-            if (urlMatch) {
-              const [, bucket, path] = urlMatch;
-              const signedUrl = await getUrl(bucket, decodeURIComponent(path), {
-                expiresIn: storageConfig.defaultSignedUrlExpiry, // Use config default
+            const ref = extractStorageRef(item.url);
+            if (ref) {
+              const resolvedUrl = await getUrl(ref.bucket, ref.path, {
+                expiresIn: storageConfig.defaultSignedUrlExpiry,
               });
-              return { ...item, processedUrl: signedUrl };
+              processedCacheRef.current.set(cacheKey, resolvedUrl);
+              return { ...item, processedUrl: resolvedUrl };
             }
 
             // If not a Supabase storage URL, use as-is
+            processedCacheRef.current.set(cacheKey, item.url);
             return { ...item, processedUrl: item.url };
           } catch (error) {
+            // Avoid spamming errors for missing/legacy paths; fall back to original URL
             handleError(
               new NetworkError(
                 'Failed to process attachment URL',
@@ -75,7 +112,9 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
                 500,
               ),
               'MessageMediaGrid',
+              { enableToast: false },
             );
+            failedCacheRef.current.add(cacheKey);
             // Fallback to original URL
             return { ...item, processedUrl: item.url };
           }
@@ -109,7 +148,9 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     if (activeIndex !== -1) setSelectedIndex(activeIndex);
   };
 
-  const modalImages = activeMedia.filter((item) => isMediaType(item.type));
+  const modalImages = activeMedia
+    .filter((item) => isMediaType(item.type))
+    .map((item) => ({ ...item, url: item.processedUrl || item.url }));
 
   const renderItem = (item: AttachmentWithUrl, index: number, isLarge = false) => {
     const itemUrl = item.processedUrl || item.url;

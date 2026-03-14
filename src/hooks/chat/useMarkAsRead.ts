@@ -1,9 +1,10 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { AuthError, NetworkError } from '@/shared/lib/errors';
 import type { FullChat } from '@/types';
+import { mapChatsInfinite } from './chats-cache';
 
 /**
  * Хук для відмітки повідомлень як прочитаних.
@@ -34,25 +35,21 @@ export function useMarkAsRead() {
       await queryClient.cancelQueries({ queryKey: ['chats'] });
       const previousChats = queryClient.getQueryData(['chats']);
 
-      queryClient.setQueryData(['chats'], (old: FullChat[] | undefined) => {
-        if (!old) return old;
+      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+        mapChatsInfinite(old, (chat) => {
+          if (chat.id !== chatId) return chat;
+          const isCurrentUser = chat.user_id === user?.id;
+          const readField = isCurrentUser ? 'user_last_read' : 'recipient_last_read';
 
-        return old.map((chat) => {
-          if (chat.id === chatId) {
-            const isCurrentUser = chat.user_id === user?.id;
-            const readField = isCurrentUser ? 'user_last_read' : 'recipient_last_read';
-
-            return {
-              ...chat,
-              [readField]: {
-                id: messageId,
-                created_at: new Date().toISOString(),
-              },
-            };
-          }
-          return chat;
-        });
-      });
+          return {
+            ...chat,
+            [readField]: {
+              id: messageId,
+              created_at: new Date().toISOString(),
+            },
+          };
+        }),
+      );
 
       return { previousChats };
     },

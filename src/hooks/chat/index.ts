@@ -1,6 +1,7 @@
 export * from './useChatDetails';
 export * from './useChats';
 export * from './useChatTyping';
+export * from './useChatsRealtime';
 export * from './useDeleteChat';
 export * from './useDeleteMessage';
 export * from './useEditMessage';
