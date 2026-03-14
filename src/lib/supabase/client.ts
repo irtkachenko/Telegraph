@@ -2,7 +2,6 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import { toast } from 'sonner';
-import { env } from '@/shared/config/env';
 import { handleError } from '@/shared/lib/error-handler';
 import { ConfigError } from '@/shared/lib/errors';
 
@@ -12,8 +11,8 @@ export function createClient() {
   // Повертаємо існуючий клієнт, якщо він уже створений у браузері
   if (typeof window !== 'undefined' && client) return client;
 
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   const newClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     global: {

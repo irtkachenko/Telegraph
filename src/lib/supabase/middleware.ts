@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
-import { env } from '@/shared/config/env';
 import { ConfigError } from '@/shared/lib/errors';
 
 export async function createMiddlewareClient(request: NextRequest) {
@@ -8,8 +7,8 @@ export async function createMiddlewareClient(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
