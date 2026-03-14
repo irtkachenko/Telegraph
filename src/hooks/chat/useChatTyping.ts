@@ -55,17 +55,29 @@ export function useChatTyping(chatId: string) {
     };
   }, [chatId, user?.id]);
 
+  const lastSentRef = useRef<number>(0);
+
   const setTyping = (typing: boolean) => {
-    if (channelRef.current) {
-      channelRef.current.track({ isTyping: typing });
+    if (!channelRef.current) return;
 
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const now = Date.now();
+    // Throttle: only send 'typing: true' every 2.5 seconds
+    // 'typing: false' is always sent immediately to ensure UI responsiveness when user stops
+    if (typing && now - lastSentRef.current < 2500) {
+      return;
+    }
 
-      if (typing) {
-        timeoutRef.current = setTimeout(() => {
-          channelRef.current?.track({ isTyping: false });
-        }, 3000);
-      }
+    channelRef.current.track({ isTyping: typing });
+    if (typing) {
+      lastSentRef.current = now;
+    }
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    if (typing) {
+      timeoutRef.current = setTimeout(() => {
+        channelRef.current?.track({ isTyping: false });
+      }, 3000);
     }
   };
 

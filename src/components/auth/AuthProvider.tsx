@@ -6,7 +6,7 @@ import type {
   SupabaseClient,
   User as SupabaseUser,
 } from '@supabase/supabase-js';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
 import { createClient } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
@@ -129,13 +129,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // Realtime для presence
   useGlobalRealtime(supabaseUser);
 
-  const value: AuthContextType = {
-    user,
-    supabaseUser,
-    loading,
-    supabase,
-    refreshUser,
-  };
+  const value = useMemo(
+    () => ({
+      user,
+      supabaseUser,
+      loading,
+      supabase,
+      refreshUser,
+    }),
+    [user, supabaseUser, loading, supabase, refreshUser],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

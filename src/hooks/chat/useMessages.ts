@@ -1,7 +1,7 @@
 'use client';
 
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { messagesApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import type { Message } from '@/types';
@@ -38,23 +38,26 @@ export function useMessages(chatId: string) {
     refetchOnWindowFocus: false,
   });
 
+  // Отримуємо всі повідомлення в мемоїзованому вигляді
+  const allMessages = useMemo(() => query.data?.pages.flat() || [], [query.data?.pages]);
+
   // Автоматичне прочитування нових повідомлень
   useEffect(() => {
-    const allMessages = query.data?.pages.flat() || [];
     if (allMessages.length === 0 || !user?.id) return;
 
-    const latestMessage = allMessages.reduce((prev, current) => {
-      return new Date(current.created_at) > new Date(prev.created_at) ? current : prev;
-    });
+    // Шукаємо останнє повідомлення НЕ від поточного користувача
+    const latestIncomingMessage = [...allMessages]
+      .reverse()
+      .find((m) => m.sender_id !== user.id);
 
-    const msgId = latestMessage.id;
-    const msgSenderId = latestMessage.sender_id;
-
-    if (msgId && msgSenderId !== user.id && lastProcessedId.current !== msgId) {
-      lastProcessedId.current = msgId;
-      markAsReadMutation.mutate({ chatId, messageId: msgId });
+    if (
+      latestIncomingMessage &&
+      lastProcessedId.current !== latestIncomingMessage.id
+    ) {
+      lastProcessedId.current = latestIncomingMessage.id;
+      markAsReadMutation.mutate({ chatId, messageId: latestIncomingMessage.id });
     }
-  }, [query.data?.pages, user?.id, chatId, markAsReadMutation]);
+  }, [allMessages, user?.id, chatId, markAsReadMutation]);
 
-  return query;
+  return { ...query, messages: allMessages };
 }

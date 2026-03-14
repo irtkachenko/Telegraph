@@ -51,3 +51,9 @@ export type FullChat = Chat & {
   user_last_read?: { id: string; created_at: string } | null;
   recipient_last_read?: { id: string; created_at: string } | null;
 };
+
+export interface RealtimePayload<T> {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: T;
+  old: T;
+}

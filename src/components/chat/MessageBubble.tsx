@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Linkify from 'linkify-react';
 import { Check, CheckCheck, Clock, Download, Edit, FileIcon, Reply, Trash2 } from 'lucide-react';
@@ -28,7 +29,7 @@ interface MessageBubbleProps {
   otherParticipantName?: string;
 }
 
-export default function MessageBubble({
+const MessageBubble = memo(({
   message,
   currentUserId,
   isRead,
@@ -39,7 +40,7 @@ export default function MessageBubble({
   onScrollToMessage,
   isHighlighed,
   otherParticipantName,
-}: MessageBubbleProps) {
+}: MessageBubbleProps) => {
   // Use snake_case field names consistently (native database format)
   const senderId = message.sender_id;
   const isMe = senderId === currentUserId;
@@ -48,8 +49,8 @@ export default function MessageBubble({
   const isEdited = !!message.updated_at;
 
   const mediaAttachments =
-    message.attachments?.filter((a) => a.type === 'image' || a.type === 'video') || [];
-  const fileAttachments = message.attachments?.filter((a) => a.type === 'file') || [];
+    message.attachments?.filter((a: any) => a.type === 'image' || a.type === 'video') || [];
+  const fileAttachments = message.attachments?.filter((a: any) => a.type === 'file') || [];
 
   // Handle hydration mismatch by using suppressHydrationWarning for date formatting
   const formattedDate = formatMessageDate(message.created_at);
@@ -153,7 +154,7 @@ export default function MessageBubble({
 
               {fileAttachments.length > 0 && (
                 <div className="mt-2 space-y-1.5 w-full min-w-0">
-                  {fileAttachments.map((file) => (
+                  {fileAttachments.map((file: any) => (
                     <a
                       key={file.id}
                       href={file.url}
@@ -261,4 +262,8 @@ export default function MessageBubble({
       </ContextMenu>
     </motion.div>
   );
-}
+});
+
+MessageBubble.displayName = 'MessageBubble';
+
+export default MessageBubble;

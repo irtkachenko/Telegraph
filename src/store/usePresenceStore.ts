@@ -1,7 +1,7 @@
 'use client';
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { create } from 'zustand';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
@@ -169,63 +169,65 @@ export function usePresence() {
   return { onlineUsers };
 }
 
+// Global manager instance to ensure only one connection exists
+let globalManager: PresenceManager | null = null;
+
+const globalManagerRef: { current: PresenceManager | null } = { current: null };
+
+function getOrCreateManager(
+  userId: string,
+  setOnlineUsers: (users: Set<string>) => void,
+  setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void,
+): PresenceManager {
+  if (globalManager && globalManager.userId === userId) {
+    return globalManager;
+  }
+
+  // If user changed, cleanup old manager
+  if (globalManager) {
+    cleanupPresence();
+  }
+
+  globalManager = createPresenceManager();
+  globalManager.userId = userId;
+  setupChannel(globalManager, userId, setOnlineUsers, setConnectionState);
+
+  // Add global event listeners
+  window.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('beforeunload', updateLastSeen);
+
+  globalManagerRef.current = globalManager;
+  return globalManager;
+}
+
 export function usePresenceSubscription() {
   const setOnlineUsers = usePresenceStore((state) => state.setOnlineUsers);
   const setConnectionState = usePresenceStore((state) => state.setConnectionState);
-  const managerRef = useRef<PresenceManager | null>(null);
 
-  // Store the ref globally for cleanup
-  useEffect(() => {
-    globalManagerRef.current = managerRef.current;
-    return () => {
-      globalManagerRef.current = null;
-    };
-  }, []);
+  const subscribe = useCallback(
+    (user: User | null) => {
+      if (!user?.id) return;
 
-  const subscribe = (user: User | null) => {
-    if (!user?.id) {
-      console.warn('Cannot subscribe to presence: no user ID');
-      return;
-    }
+      const manager = getOrCreateManager(user.id, setOnlineUsers, setConnectionState);
+      manager.subscribers++;
+    },
+    [setOnlineUsers, setConnectionState],
+  );
 
-    // Initialize manager if it doesn't exist
-    if (!managerRef.current) {
-      managerRef.current = createPresenceManager();
-    }
+  const unsubscribe = useCallback(() => {
+    if (!globalManager) return;
 
-    // If this is a new user, clean up the old channel
-    if (managerRef.current.userId && managerRef.current.userId !== user.id) {
-      cleanupPresence();
-      managerRef.current = createPresenceManager();
-    }
-
-    managerRef.current.userId = user.id;
-    managerRef.current.subscribers++;
-
-    // Setup channel if not already done
-    if (!managerRef.current.channel && managerRef.current.subscribers === 1) {
-      setupChannel(managerRef.current, user.id, setOnlineUsers, setConnectionState);
-
-      // Add global event listeners
-      window.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('beforeunload', updateLastSeen);
-    }
-  };
-
-  const unsubscribe = () => {
-    if (!managerRef.current) return;
-
-    managerRef.current.subscribers--;
+    globalManager.subscribers--;
 
     // Cleanup when no more subscribers
-    if (managerRef.current.subscribers <= 0) {
+    if (globalManager.subscribers <= 0) {
       cleanupPresence();
     }
-  };
+  }, []);
 
-  const getConnectionState = () => {
+  const getConnectionState = useCallback(() => {
     return usePresenceStore.getState().connectionState;
-  };
+  }, []);
 
   return {
     subscribe,
@@ -234,35 +236,34 @@ export function usePresenceSubscription() {
   };
 }
 
-// Global cleanup function
-const globalManagerRef: { current: PresenceManager | null } = { current: null };
-
 function cleanupPresence(): void {
-  if (!globalManagerRef.current) return;
+  const manager = globalManager;
+  if (!manager) return;
 
   // Clear debounce timer
-  if (globalManagerRef.current.debounceTimer) {
-    clearTimeout(globalManagerRef.current.debounceTimer);
-    globalManagerRef.current.debounceTimer = null;
+  if (manager.debounceTimer) {
+    clearTimeout(manager.debounceTimer);
+    manager.debounceTimer = null;
   }
 
   // Update last seen before disconnecting
   updateLastSeen();
 
   // Stop heartbeat
-  stopHeartbeat(globalManagerRef.current);
+  stopHeartbeat(manager);
 
   // Remove channel
-  if (globalManagerRef.current.channel) {
-    supabase.removeChannel(globalManagerRef.current.channel);
-    globalManagerRef.current.channel = null;
+  if (manager.channel) {
+    supabase.removeChannel(manager.channel);
+    manager.channel = null;
   }
 
   // Remove global event listeners
   window.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('beforeunload', updateLastSeen);
 
-  // Reset manager
+  // Reset global state
+  globalManager = null;
   globalManagerRef.current = null;
 
   // Update store state

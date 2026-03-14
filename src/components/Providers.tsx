@@ -2,51 +2,55 @@
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { useLayoutEffect, useRef } from 'react';
+import { Profiler, useRef } from 'react';
+import type { ProfilerOnRenderCallback } from 'react';
 import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
-import { handleError } from '@/shared/lib/error-handler';
-import { AppError } from '@/shared/lib/errors';
 
 /**
  * Внутрішній компонент-запобіжник.
- * Він відстежує кількість рендерів у всьому додатку.
+ * Використовує React.Profiler для глобального моніторингу всього дерева.
  */
 function RenderGuard({ children }: { children: React.ReactNode }) {
-  const renderCount = useRef(0);
-  const startTime = useRef<number | null>(null);
+  const commitCount = useRef(0);
+  const lastResetTime = useRef(Date.now());
+  const lastToastTime = useRef(0);
 
-  useLayoutEffect(() => {
-    // Initialize startTime on first render
-    if (startTime.current === null) {
-      startTime.current = Date.now();
-    }
+  if (process.env.NODE_ENV !== 'development') {
+    return <>{children}</>;
+  }
 
-    renderCount.current += 1;
+  const handleRender: ProfilerOnRenderCallback = (id, phase, actualDuration) => {
+    commitCount.current++;
     const now = Date.now();
 
-    // Скидаємо лічильник кожні 5 секунд
-    if (startTime.current && now - startTime.current > 5000) {
-      renderCount.current = 1;
-      startTime.current = now;
-      return;
+    // Перевіряємо частоту коммітів кожну секунду
+    if (now - lastResetTime.current >= 1000) {
+      if (commitCount.current > 40 && now - lastToastTime.current > 5000) {
+        toast.error('⚠️ Глобальне перевантаження рендерами!', {
+          description: `Детектовано ${commitCount.current} коммітів за секунду. Можлива нескінченна петля оновлень.`,
+        });
+        lastToastTime.current = now;
+      }
+      commitCount.current = 0;
+      lastResetTime.current = now;
     }
 
-    // Якщо рендерів занадто багато (більше 30 за 5 сек) — це "петля"
-    if (renderCount.current > 30) {
-      const error = new AppError(
-        'Критична помилка клієнта - детектовано нескінченний рендеринг',
-        'INFINITE_RENDER_LOOP',
-        500,
-        false,
-      );
-      handleError(error, 'RenderGuard');
-      return;
+    // Також відстежуємо занадто важкі комміти (більше 150мс)
+    if (actualDuration > 150 && now - lastToastTime.current > 10000) {
+      toast.warning('🐢 Важкий рендер!', {
+        description: `Останнє оновлення дерева зайняло ${actualDuration.toFixed(0)}мс. Це може спричинити фрізи.`,
+      });
+      lastToastTime.current = now;
     }
-  }); // Run on every render to detect infinite loops
+  };
 
-  return <>{children}</>;
+  return (
+    <Profiler id="TraceMonitor" onRender={handleRender}>
+      {children}
+    </Profiler>
+  );
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {

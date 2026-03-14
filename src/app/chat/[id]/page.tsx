@@ -12,12 +12,11 @@ import MessageBubble from '@/components/chat/MessageBubble';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
   useChatDetails,
-  useChatTyping,
+  useChatEvents,
   useDeleteMessage,
   useMessages,
   useScrollToMessage,
 } from '@/hooks/chat';
-import { useChatRealtime } from '@/hooks/useGlobalRealtime';
 import { usePresence } from '@/hooks/user';
 import { formatRelativeTime, getSafeTimestamp } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
@@ -29,16 +28,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
   const {
-    data: messagesData,
+    messages,
     isLoading: isMessagesLoading,
     fetchPreviousPage,
     hasPreviousPage,
     isFetchingPreviousPage,
   } = useMessages(id);
 
-  const { isTyping: typingUsers, setTyping } = useChatTyping(id);
-  useChatRealtime(id, supabaseUser);
-  const messages = messagesData?.pages.flat() || [];
+  const { typingUsers, setTyping } = useChatEvents(id, supabaseUser);
   const { onlineUsers } = usePresence();
   const deleteMessage = useDeleteMessage(id);
 
@@ -85,63 +82,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return map;
   }, [messages]);
 
-  // --- ЛОГІКА ОНОВЛЕННЯ ГАЛОЧОК ---
-  const recipientLastReadAt = (() => {
-    if (!chat || !user) return null;
-
-    // Визначаємо, чий timestamp читання нас цікавить (співрозмовника)
-    const isUserCreator = chat.user_id === user.id;
-
-    // Знайдемо повідомлення, яке було прочитано
-    const readMessageId = isUserCreator ? chat.recipient_last_read_id : chat.user_last_read_id;
-    const readMessage = messages.find((m) => m.id === readMessageId);
-
-    return readMessage?.created_at || null;
-  })();
-
-  // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ ---
+  // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ (Оптимізовано: не перераховуємо при кожному повідомленні, якщо учасники не змінилися) ---
   const uniqueParticipants = useMemo(() => {
     const participants: User[] = [];
-
-    // Add current user
-    if (user) {
-      participants.push(user);
-    }
-
-    // Add chat participants from chat details
+    if (user) participants.push(user);
     if (chat?.participants) {
-      chat.participants.forEach((participant: User) => {
-        if (!participants.find((p) => p.id === participant.id)) {
-          participants.push(participant);
-        }
+      chat.participants.forEach((p: User) => {
+        if (!participants.find((ep) => ep.id === p.id)) participants.push(p);
       });
     }
-
-    // Add unique senders from messages (using joined user data)
-    messages.forEach((message: Message) => {
-      if (message.sender_id && !participants.find((p) => p.id === message.sender_id)) {
-        // Use joined user data if available, otherwise create minimal user object
-        if (message.user) {
-          participants.push({
-            id: message.sender_id,
-            email: '',
-            email_confirmed_at: undefined,
-            phone: undefined,
-            user_metadata: {},
-            name: message.user.name || null,
-            image: message.user.image || null,
-            last_seen: null,
-            is_online: false,
-            display_name: message.user.name || 'Unknown User',
-          });
-        } else if (message.sender) {
-          participants.push(message.sender);
-        }
-      }
-    });
-
     return participants;
-  }, [user, chat?.participants, messages]);
+  }, [user, chat?.participants]);
+
+  // Зберігаємо початкову кількість повідомлень для Virtuoso (тільки для ініціалізації)
+  const initialMessagesCount = useRef(messages.length);
 
   if (isChatLoading || (isMessagesLoading && !messages.length)) {
     return (
@@ -166,7 +120,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const otherParticipant = chat.participants.find((p: User) => p.id !== user?.id);
   const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
-  const isTypingNow = otherParticipant && typingUsers[otherParticipant.id];
+  const isTypingNow = otherParticipant && typingUsers.has(otherParticipant.id);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-64px)] w-full bg-background relative overflow-hidden">
@@ -219,7 +173,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            initialTopMostItemIndex={messages.length - 1}
+            initialTopMostItemIndex={initialMessagesCount.current - 1}
             followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => setShowScrollButton(!atBottom)}
