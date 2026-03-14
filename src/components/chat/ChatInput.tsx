@@ -71,7 +71,6 @@ export default function ChatInput({
   }, []);
 
   useEffect(() => {
-    content;
     adjustTextareaHeight();
   }, [content, adjustTextareaHeight]);
 

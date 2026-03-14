@@ -54,7 +54,7 @@ export function useSendMessage(chatId: string) {
         updated_at: null,
         reply_to_id: newMessage.reply_to_id || null,
         reply_to: parentMessage,
-        attachments: (newMessage.attachments || []).map((att) => ({ ...att, uploading: true })),
+        attachments: newMessage.attachments || [], // Не додаємо uploading: true, щоб уникнути некоректних станів
         is_optimistic: true,
       } as Message;
 
