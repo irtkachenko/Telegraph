@@ -2,7 +2,7 @@
 
 import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
-import { storageApi } from '@/api';
+import { storageApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import {
   getFileTypeCategory,

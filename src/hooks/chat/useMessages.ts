@@ -2,7 +2,7 @@
 
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { messagesApi } from '@/api';
+import { messagesApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';

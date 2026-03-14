@@ -1,7 +1,7 @@
 'use client';
 
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
-import { chatsApi } from '@/api';
+import { chatsApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import type { FullChat } from '@/types';
 

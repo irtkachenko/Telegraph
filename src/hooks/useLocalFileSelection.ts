@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { storageApi } from '@/api';
+import { storageApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { fileUploadSchema, singleFileSchema } from '@/lib/validations/chat';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
+import { useStorageLimits } from './useDynamicStorageConfig';
 
 export interface SelectedFile {
   id: string;
@@ -32,6 +31,7 @@ export interface PendingAttachment extends SelectedFile {
 export function useLocalFileSelection() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const { user } = useSupabaseAuth();
+  const { validateFile: validateFileWithLimits } = useStorageLimits();
 
   // Clean up preview URLs when component unmounts
   useEffect(() => {
@@ -43,20 +43,17 @@ export function useLocalFileSelection() {
   }, [selectedFiles]);
 
   const validateFile = (file: File): { valid: boolean; error?: string } => {
-    // Validate individual file using Zod schema
-    const fileValidation = singleFileSchema.safeParse({
-      file,
-      maxSize: 5 * 1024 * 1024, // 5MB
-    });
-
-    if (!fileValidation.success) {
-      const errorMessages = fileValidation.error.issues
-        .map((err: { message: string }) => err.message)
-        .join(', ');
-      throw new ValidationError(errorMessages, 'file', 'FILE_VALIDATION_ERROR', 400);
+    const validation = validateFileWithLimits(file);
+    if (!validation.valid) {
+      throw new ValidationError(
+        validation.error || 'Invalid file',
+        'file',
+        'FILE_VALIDATION_ERROR',
+        400,
+      );
     }
 
-    return { valid: true };
+    return validation;
   };
 
   const addFiles = async (files: FileList | File[]) => {

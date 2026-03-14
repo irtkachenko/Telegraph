@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage, useSendMessage } from '@/hooks/chat';
 import { useOptimisticAttachment } from '@/hooks/useOptimisticAttachment';
+import { useStorageConfig } from '@/hooks/useStorageConfig';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
@@ -35,6 +36,7 @@ export default function ChatInput({
   const [content, setContent] = useState('');
   const { attachments, uploadFile, removeAttachment, clearAttachments, isUploading } =
     useOptimisticAttachment(chatId);
+  const { data: storageConfig, isLoading } = useStorageConfig();
 
   // Використовуємо оновлений хук з Optimistic UI
   const sendMessage = useSendMessage(chatId);
@@ -170,7 +172,7 @@ export default function ChatInput({
           onChange={handleFileChange}
           multiple
           className="hidden"
-          accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar,.7z"
+          accept={storageConfig?.limits.allowedTypes.join(',') || 'image/*,video/*'}
         />
 
         <button

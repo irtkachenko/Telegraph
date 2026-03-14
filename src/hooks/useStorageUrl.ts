@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { storageApi } from '@/api';
+import { storageApi } from '@/services';
 import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
 import { AuthError, NetworkError } from '@/shared/lib/errors';
 

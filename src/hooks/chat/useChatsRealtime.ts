@@ -3,7 +3,7 @@
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { realtimeApi } from '@/api';
+import { realtimeApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat, Message } from '@/types';

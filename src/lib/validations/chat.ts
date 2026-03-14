@@ -83,59 +83,37 @@ export const searchSchema = z.object({
     }),
 });
 
-// File upload validation schema
-export const fileUploadSchema = z
-  .object({
+// File upload validation schema - динамічні налаштування
+export const createFileUploadSchema = (maxSize: number, allowedTypes: string[]) =>
+  z.object({
     files: z.array(z.instanceof(File)).max(5, 'Cannot upload more than 5 files'),
-    maxSize: z.number().max(5 * 1024 * 1024, 'File size cannot exceed 5MB'), // 5MB
-    allowedTypes: z
-      .array(z.string())
-      .default([
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-      ]),
+    maxSize: z.number().max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
+    allowedTypes: z.array(z.string()).default(allowedTypes),
   })
   .refine(
     (data) => {
       return data.files.every(
-        (file) => data.allowedTypes.includes(file.type) && file.size <= data.maxSize,
+        (file) => data.allowedTypes.some(type => file.type.match(type.replace('*', '.*'))) && file.size <= data.maxSize,
       );
     },
     {
-      message: 'All files must be valid types and under 5MB',
+      message: `All files must be valid types and under ${Math.round(maxSize / 1024 / 1024)}MB`,
     },
   );
 
-// Individual file validation
-export const singleFileSchema = z
-  .object({
+// Individual file validation - динамічні налаштування
+export const createSingleFileSchema = (maxSize: number, allowedTypes: string[]) =>
+  z.object({
     file: z.instanceof(File),
-    maxSize: z.number().max(5 * 1024 * 1024, 'File size cannot exceed 5MB'),
-    allowedTypes: z
-      .array(z.string())
-      .default([
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-      ]),
+    maxSize: z.number().max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
+    allowedTypes: z.array(z.string()).default(allowedTypes),
   })
   .refine(
     (data) => {
-      return data.allowedTypes.includes(data.file.type) && data.file.size <= data.maxSize;
+      return data.allowedTypes.some(type => data.file.type.match(type.replace('*', '.*'))) && data.file.size <= data.maxSize;
     },
     {
-      message: 'File must be a valid type and under 5MB',
+      message: `File must be a valid type and under ${Math.round(maxSize / 1024 / 1024)}MB`,
     },
   );
 
@@ -146,5 +124,6 @@ export type ProfileInput = z.infer<typeof profileSchema>;
 export type ChatMembershipInput = z.infer<typeof chatMembershipSchema>;
 export type MarkAsReadInput = z.infer<typeof markAsReadSchema>;
 export type SearchInput = z.infer<typeof searchSchema>;
-export type FileUploadInput = z.infer<typeof fileUploadSchema>;
-export type SingleFileInput = z.infer<typeof singleFileSchema>;
+// Динамічні типи для валідації файлів
+export type FileUploadInput = ReturnType<typeof createFileUploadSchema>;
+export type SingleFileInput = ReturnType<typeof createSingleFileSchema>;

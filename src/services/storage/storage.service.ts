@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
+import type { StorageConfig as DynamicStorageConfig } from '@/hooks/useStorageConfig';
 
 interface SignedUrlOptions {
   expiresIn?: number;
@@ -172,13 +173,16 @@ export const storageApi = {
   /**
    * Отримання динамічної конфігурації storage
    */
-  getStorageConfig: async (): Promise<StorageConfig> => {
-    const { data, error } = await supabase.from('storage_configs').select('*').single();
-
-    if (error && error.code !== 'PGRST116') {
-      throw error;
+  getStorageConfig: async (): Promise<DynamicStorageConfig> => {
+    const response = await fetch('/api/storage/config');
+    if (!response.ok) {
+      throw new NetworkError(
+        'Failed to get storage config',
+        'storage',
+        'CONFIG_ERROR',
+        response.status,
+      );
     }
-
-    return data || storageConfig;
+    return response.json();
   },
 };

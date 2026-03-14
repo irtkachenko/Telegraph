@@ -1,13 +1,13 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { storageApi } from '@/api';
 import {
   getFileTypeCategory,
+  getMimeTypeCategory,
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
+import { useStorageConfig, type StorageConfig } from './useStorageConfig';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -23,56 +23,61 @@ const DEFAULT_POLICIES: StoragePolicies = {
 };
 
 export function useDynamicStorageConfig() {
-  return useQuery({
-    queryKey: ['storage-policies'],
-    queryFn: async (): Promise<StoragePolicies> => {
-      try {
-        // Get storage config from API
-        const config = await storageApi.getStorageConfig();
-
-        // Use defaults since StorageConfig doesn't have these properties
-        return DEFAULT_POLICIES;
-      } catch (error) {
-        console.warn('Failed to fetch storage policies, using defaults:', error);
-        return DEFAULT_POLICIES;
-      }
-    },
-    staleTime: 1000 * 60 * 30, // Cache for 30 minutes
-    retry: 2,
-    refetchOnWindowFocus: false,
-  });
+  return useStorageConfig();
 }
 
 export function useStorageLimits() {
-  const { data: policies, isLoading } = useDynamicStorageConfig();
+  const { data: config, isLoading } = useDynamicStorageConfig();
 
   const getMaxFileSize = (category: 'images' | 'videos' | 'documents'): number => {
-    if (!policies) return storageConfig.fileTypes[category].maxFileSize;
+    if (!config) return storageConfig.fileTypes[category].maxFileSize;
 
-    // Use dynamic limit if available, otherwise fall back to config
+    // Convert string to bytes and use dynamic limit
+    const dynamicMaxSize = parseInt(config.limits.maxFileSize);
     const categoryMaxSize = storageConfig.fileTypes[category].maxFileSize;
-    return Math.min(policies.maxFileSize, categoryMaxSize);
+    return Math.min(dynamicMaxSize, categoryMaxSize);
   };
 
   const isAllowedExtension = (extension: string): boolean => {
-    if (!policies) return isAllowedFileExtension(extension);
-
     const ext = extension.toLowerCase();
-    return policies.allowedExtensions.includes(ext);
+    if (!config) return isAllowedFileExtension(ext);
+
+    // If server returns MIME types (e.g. image/png), extension matching is not reliable.
+    // Keep extension-based fallback using static config.
+    return isAllowedFileExtension(ext);
+  };
+
+  const isAllowedMimeType = (mimeType: string): boolean => {
+    if (!config) return true;
+
+    if (!mimeType) return true;
+
+    return config.limits.allowedTypes.some((type) => {
+      // type may be exact MIME (image/png) or wildcard (image/*)
+      const pattern = `^${type.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
+      return new RegExp(pattern, 'i').test(mimeType);
+    });
   };
 
   const getRateLimit = (): number => {
-    return policies?.rateLimitPerMinute || DEFAULT_POLICIES.rateLimitPerMinute;
+    // For now, use default rate limit
+    return DEFAULT_POLICIES.rateLimitPerMinute;
   };
 
   const validateFile = (file: File): { valid: boolean; error?: string } => {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
 
-    if (!isAllowedExtension(extension)) {
+    // Prefer MIME validation (Supabase returns allowed_mime_types)
+    if (config && !isAllowedMimeType(file.type)) {
       return { valid: false, error: 'Тип файлу не підтримується' };
     }
 
-    const category = getFileTypeCategory(extension);
+    // Fallback to extension validation only when we don't have a config yet
+    if (!config && !isAllowedExtension(extension)) {
+      return { valid: false, error: 'Тип файлу не підтримується' };
+    }
+
+    const category = file.type ? getMimeTypeCategory(file.type) ?? getFileTypeCategory(extension) : getFileTypeCategory(extension);
     if (!category) {
       return { valid: false, error: 'Невідомий тип файлу' };
     }
@@ -90,7 +95,7 @@ export function useStorageLimits() {
   };
 
   return {
-    policies,
+    config,
     isLoading,
     getMaxFileSize,
     isAllowedExtension,

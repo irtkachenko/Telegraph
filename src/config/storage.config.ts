@@ -150,6 +150,21 @@ export function getFileTypeCategory(extension: string): 'images' | 'videos' | 'd
   return null;
 }
 
+export function getMimeTypeCategory(mimeType: string): 'images' | 'videos' | 'documents' | null {
+  const mime = mimeType.toLowerCase();
+
+  for (const [category, config] of Object.entries(storageConfig.fileTypes)) {
+    if (config.mimeTypes.some((t) => t.toLowerCase() === mime)) {
+      return category as 'images' | 'videos' | 'documents';
+    }
+  }
+
+  if (mime.startsWith('image/')) return 'images';
+  if (mime.startsWith('video/')) return 'videos';
+
+  return null;
+}
+
 export function isMediaType(extension: string): boolean {
   const category = getFileTypeCategory(extension);
   return category === 'images' || category === 'videos';

@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { chatsApi } from '@/api';
+import { chatsApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { InfiniteData } from '@tanstack/react-query';
