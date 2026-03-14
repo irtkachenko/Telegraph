@@ -169,12 +169,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               Напишіть щось, щоб розпочати бесіду!
             </p>
           </div>
-        ) : (
+        ) : messages.length > 0 ? (
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            initialTopMostItemIndex={initialMessagesCount.current - 1}
-            followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
+            followOutput="smooth"
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => setShowScrollButton(!atBottom)}
             startReached={() => {
@@ -233,7 +232,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               Footer: () => <div className="h-6 w-full" />,
             }}
           />
-        )}
+        ) : null}
 
         <AnimatePresence>
           {showScrollButton && messages.length > 0 && (
@@ -242,11 +241,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               onClick={() => {
-                virtuosoRef.current?.scrollToIndex({
-                  index: messages.length,
-                  behavior: 'smooth',
-                  align: 'end',
-                });
+                try {
+                  if (messages.length > 0) {
+                    const lastIndex = Math.max(0, messages.length - 1);
+                    console.log('📍 Scrolling to index:', lastIndex, 'of', messages.length);
+                    
+                    virtuosoRef.current?.scrollToIndex({
+                      index: lastIndex,
+                      behavior: 'smooth',
+                      align: 'end',
+                    });
+                  }
+                } catch (error) {
+                  console.error('❌ Virtuoso scroll error:', error);
+                  // Fallback: простий scroll до кінця через DOM query
+                  const container = document.querySelector('.no-scrollbar');
+                  if (container) {
+                    container.scrollTop = container.scrollHeight;
+                  }
+                }
               }}
               className="absolute bottom-6 right-6 p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-2xl text-white shadow-2xl z-10"
             >

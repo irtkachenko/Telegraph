@@ -3,7 +3,7 @@
 import { MessageSquare, Trash2, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -28,6 +28,40 @@ function ChatListBase() {
 
   // Об'єднуємо всі сторінки в один масив
   const chats = data?.pages.flat() || [];
+  
+  // Debug для пагінації
+  console.log('📄 Chat pagination:', {
+    pagesCount: data?.pages.length || 0,
+    pagesLengths: data?.pages.map(p => p.length) || [],
+    totalAfterFlat: chats.length
+  });
+
+  // Debug лог для Virtuoso
+  const validChats = useMemo(() => {
+    const filtered = chats.filter(chat => chat?.id);
+    const duplicateCheck = new Set(filtered.map(c => c.id)).size !== filtered.length;
+    
+    console.log('🔍 Chats for Virtuoso:', {
+      total: chats.length,
+      valid: filtered.length,
+      ids: filtered.map(c => c.id),
+      hasDuplicates: duplicateCheck,
+      firstItem: filtered[0],
+      lastItem: filtered[filtered.length - 1]
+    });
+    
+    if (duplicateCheck) {
+      console.error('❌ DUPLICATE CHAT IDS DETECTED!');
+    }
+    
+    // Захист від порожніх даних
+    if (filtered.length === 0) {
+      console.log('📭 No chats to render, returning empty array');
+      return [];
+    }
+    
+    return filtered;
+  }, [chats]);
 
   const handleChatClick = () => {
     window.dispatchEvent(new CustomEvent('close-mobile-sidebar'));
@@ -205,21 +239,31 @@ function ChatListBase() {
 
   return (
     <>
-      <Virtuoso
-        data={chats}
-        itemContent={renderChat}
-        endReached={() => {
-          if (hasNextPage && !isFetchingNextPage) {
-            fetchNextPage();
-          }
-        }}
-        overscan={20}
-        components={{
-          Footer: renderFooter,
-        }}
-        className="flex-1 px-2"
-        style={{ height: '100%' }}
-      />
+      {validChats.length > 0 ? (
+        <Virtuoso
+          data={validChats}
+          itemContent={renderChat}
+          endReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          overscan={20}
+          components={{
+            Footer: renderFooter,
+          }}
+          className="flex-1 px-2"
+          style={{ height: '100%' }}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="p-8 text-sm text-gray-500 mt-10">
+              {isLoading ? 'Завантаження...' : 'Немає діалогів'}
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmationDialog
         open={!!chatToDelete}
