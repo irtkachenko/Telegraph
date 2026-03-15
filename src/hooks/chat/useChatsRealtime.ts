@@ -69,10 +69,8 @@ export function useChatsRealtime(user: User | null) {
         attachments: (newMessage.attachments as Message['attachments']) || [],
       } as Message;
 
-      queryClient.setQueryData(
-        ['chats'],
-        (old: InfiniteData<FullChat[]> | undefined) =>
-          upsertChatLastMessage(old, newMessage.chat_id, normalizedMessage),
+      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+        upsertChatLastMessage(old, newMessage.chat_id, normalizedMessage),
       );
     };
 
@@ -88,15 +86,13 @@ export function useChatsRealtime(user: User | null) {
         attachments: (updatedMessage.attachments as Message['attachments']) || [],
       } as Message;
 
-      queryClient.setQueryData(
-        ['chats'],
-        (old: InfiniteData<FullChat[]> | undefined) =>
-          updateChatMessageIfMatches(
-            old,
-            updatedMessage.chat_id,
-            (last) => last?.id === updatedMessage.id,
-            (chat) => ({ ...chat, messages: [normalizedMessage] }),
-          ),
+      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+        updateChatMessageIfMatches(
+          old,
+          updatedMessage.chat_id,
+          (last) => last?.id === updatedMessage.id,
+          (chat) => ({ ...chat, messages: [normalizedMessage] }),
+        ),
       );
     };
 
@@ -108,18 +104,16 @@ export function useChatsRealtime(user: User | null) {
       const deletedChatId = payload.old?.chat_id;
       if (!deletedId || !deletedChatId) return;
 
-      queryClient.setQueryData(
-        ['chats'],
-        (old: InfiniteData<FullChat[]> | undefined) =>
-          updateChatMessageIfMatches(
-            old,
-            deletedChatId,
-            (last) => last?.id === deletedId,
-            (chat) => ({
-              ...chat,
-              messages: chat.messages?.filter((m) => m.id !== deletedId) || [],
-            }),
-          ),
+      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+        updateChatMessageIfMatches(
+          old,
+          deletedChatId,
+          (last) => last?.id === deletedId,
+          (chat) => ({
+            ...chat,
+            messages: chat.messages?.filter((m) => m.id !== deletedId) || [],
+          }),
+        ),
       );
     };
 
@@ -140,7 +134,12 @@ export function useChatsRealtime(user: User | null) {
         handleError(
           error instanceof Error
             ? error
-            : new NetworkError('Realtime message handling failed', 'realtime', 'REALTIME_ERROR', 500),
+            : new NetworkError(
+                'Realtime message handling failed',
+                'realtime',
+                'REALTIME_ERROR',
+                500,
+              ),
           'ChatsRealtime',
           { enableToast: false },
         );

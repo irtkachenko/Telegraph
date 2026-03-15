@@ -7,7 +7,7 @@ import {
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
-import { useStorageConfig, type StorageConfig } from './useStorageConfig';
+import { type StorageConfig, useStorageConfig } from './useStorageConfig';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -77,7 +77,9 @@ export function useStorageLimits() {
       return { valid: false, error: 'Тип файлу не підтримується' };
     }
 
-    const category = file.type ? getMimeTypeCategory(file.type) ?? getFileTypeCategory(extension) : getFileTypeCategory(extension);
+    const category = file.type
+      ? (getMimeTypeCategory(file.type) ?? getFileTypeCategory(extension))
+      : getFileTypeCategory(extension);
     if (!category) {
       return { valid: false, error: 'Невідомий тип файлу' };
     }

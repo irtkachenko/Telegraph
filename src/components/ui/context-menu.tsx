@@ -78,13 +78,13 @@ ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
 
 export {
   ContextMenu,
-  ContextMenuTrigger,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuGroup,
+  ContextMenuItem,
   ContextMenuPortal,
+  ContextMenuRadioGroup,
+  ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubTrigger,
-  ContextMenuRadioGroup,
+  ContextMenuTrigger,
 };

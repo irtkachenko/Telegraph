@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { storageApi } from '@/services';
 import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
+import { storageApi } from '@/services';
 import { AuthError, NetworkError } from '@/shared/lib/errors';
 
 interface SignedUrlOptions {
@@ -26,33 +26,21 @@ export function useStorageUrl(): UseStorageUrlReturn {
   const [error, setError] = useState<Error | null>(null);
 
   const getPublicUrl = useCallback(
-    async (
-      bucket: string,
-      path: string,
-      options?: SignedUrlOptions,
-    ): Promise<string> => {
+    async (bucket: string, path: string, options?: SignedUrlOptions): Promise<string> => {
       return await storageApi.getPublicUrl(bucket, path, options);
     },
     [],
   );
 
   const getSignedUrl = useCallback(
-    async (
-      bucket: string,
-      path: string,
-      options?: SignedUrlOptions,
-    ): Promise<string> => {
+    async (bucket: string, path: string, options?: SignedUrlOptions): Promise<string> => {
       return await storageApi.getSignedUrl(bucket, path, options);
     },
     [],
   );
 
   const getUrl = useCallback(
-    async (
-      bucket: string,
-      path: string,
-      options?: SignedUrlOptions,
-    ): Promise<string> => {
+    async (bucket: string, path: string, options?: SignedUrlOptions): Promise<string> => {
       setIsLoading(true);
       setError(null);
 

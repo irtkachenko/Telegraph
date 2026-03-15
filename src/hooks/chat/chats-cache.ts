@@ -14,9 +14,7 @@ export function mapChatsInfinite(
 ): InfiniteData<FullChat[]> | undefined {
   if (!data) return data;
 
-  const pages = data.pages.map((page) =>
-    page.map(mapper).filter(Boolean) as FullChat[],
-  );
+  const pages = data.pages.map((page) => page.map(mapper).filter(Boolean) as FullChat[]);
 
   return { ...data, pages };
 }

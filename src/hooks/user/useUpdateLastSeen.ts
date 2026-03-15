@@ -1,8 +1,8 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { userApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { userApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 

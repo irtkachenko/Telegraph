@@ -2,8 +2,8 @@
 
 import type { RealtimeChannel, RealtimePresenceState } from '@supabase/supabase-js';
 import { useEffect, useRef, useState } from 'react';
-import { realtimeApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { realtimeApi } from '@/services';
 
 interface TypingPresence {
   isTyping: boolean;

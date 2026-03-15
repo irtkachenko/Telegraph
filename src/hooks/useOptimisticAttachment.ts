@@ -2,13 +2,13 @@
 
 import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
-import { storageApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import {
   getFileTypeCategory,
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
+import { storageApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';

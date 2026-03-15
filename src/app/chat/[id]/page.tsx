@@ -245,7 +245,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   if (messages.length > 0) {
                     const lastIndex = Math.max(0, messages.length - 1);
                     console.log('📍 Scrolling to index:', lastIndex, 'of', messages.length);
-                    
+
                     virtuosoRef.current?.scrollToIndex({
                       index: lastIndex,
                       behavior: 'smooth',

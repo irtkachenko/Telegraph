@@ -29,7 +29,9 @@ function extractStorageRef(rawUrl: string): StorageRef | null {
   const url = rawUrl.split('?')[0] || rawUrl;
 
   // Match Supabase storage URLs (public or signed)
-  const supabaseMatch = url.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/);
+  const supabaseMatch = url.match(
+    /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/,
+  );
   if (supabaseMatch) {
     const [, bucket, path] = supabaseMatch;
     return { bucket, path: decodeURIComponent(path) };
