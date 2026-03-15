@@ -1,6 +1,6 @@
 'use client';
 
-import { FileX, ImageOff, Loader2, PlayCircle } from 'lucide-react';
+import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { storageConfig, getUrlExpiryBuffer, getUrlCheckInterval } from '@/config/storage.config';
@@ -67,140 +67,53 @@ const MediaPlaceholder = ({ reason = 'deleted' }: { reason?: 'deleted' | 'error'
 export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
-  const [processedItems, setProcessedItems] = useState<AttachmentWithUrl[]>([]);
-  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const { getUrl } = useStorageUrl();
   const processedCacheRef = useRef<Map<string, CachedUrl>>(new Map());
   const failedCacheRef = useRef<Set<string>>(new Set());
-  const expiryCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Process attachment URLs to handle private storage
-  useEffect(() => {
-    const processUrls = async () => {
-      if (!items || items.length === 0) {
-        setProcessedItems([]);
-        return;
-      }
+  // Process attachment URLs
+  const processedItems = useMemo(() => {
+    if (!items || items.length === 0) {
+      return [];
+    }
 
-      const processed = await Promise.all(
-        items.map(async (item) => {
-          const cacheKey = `${item.id}:${item.url}`;
-          const cached = processedCacheRef.current.get(cacheKey);
-          if (cached && cached.expiresAt > Date.now() + getUrlExpiryBuffer() * 1000) { // Use config buffer
-            return { ...item, processedUrl: cached.url };
-          }
-          if (failedCacheRef.current.has(cacheKey)) {
-            return { ...item, processedUrl: item.url };
-          }
-
-          // Якщо це blob URL (оптимістичне повідомлення), використовуємо як є
-          if (item.url.startsWith('blob:')) {
-            processedCacheRef.current.set(cacheKey, {
-              url: item.url,
-              expiresAt: Date.now() + 1000 * 60 * 60 * 24, // 24 hours for blob URLs
-            });
-            return { ...item, processedUrl: item.url };
-          }
-
-          // Skip if already processed or if URL is already a signed URL
-          if (item.url.includes('?token=')) {
-            return { ...item, processedUrl: item.url };
-          }
-
-          try {
-            const ref = extractStorageRef(item.url);
-            if (ref) {
-              const resolvedUrl = await getUrl(ref.bucket, ref.path, {
-                expiresIn: storageConfig.defaults.signedUrlExpiry,
-              });
-              processedCacheRef.current.set(cacheKey, {
-                url: resolvedUrl,
-                expiresAt: Date.now() + (storageConfig.defaults.signedUrlExpiry * 1000),
-              });
-              return { ...item, processedUrl: resolvedUrl };
-            }
-
-            // If not a Supabase storage URL, use as-is
-            processedCacheRef.current.set(cacheKey, {
-              url: item.url,
-              expiresAt: Date.now() + 1000 * 60 * 60 * 24, // 24 hours for public URLs
-            });
-            return { ...item, processedUrl: item.url };
-          } catch (_error) {
-            // Avoid spamming errors for missing/legacy paths; fall back to original URL
-            handleError(
-              new NetworkError(
-                'Failed to process attachment URL',
-                'attachment',
-                'ATTACHMENT_URL_PROCESS_ERROR',
-                500,
-              ),
-              'MessageMediaGrid',
-              { enableToast: false },
-            );
-            failedCacheRef.current.add(cacheKey);
-            // Fallback to original URL
-            return { ...item, processedUrl: item.url };
-          }
-        }),
-      );
-
-      setProcessedItems(processed);
-      
-      // Only set loading for images that are not already cached
-      const newImageUrls = processed
-        .filter(item => item.type === 'image')
-        .map(item => {
-          const url = item.processedUrl || item.url;
-          const cacheKey = `${item.id}:${item.url}`;
-          // Only add to loading if not already cached and not already loading
-          const cached = processedCacheRef.current.get(cacheKey);
-          return (!cached || cached.expiresAt <= Date.now()) && !loadingImages.has(url) ? url : null;
-        })
-        .filter((url): url is string => url !== null);
-      
-      if (newImageUrls.length > 0) {
-        setLoadingImages(prev => new Set([...prev, ...newImageUrls]));
-      }
-    };
-
-    processUrls();
-  }, [items, getUrl]);
-
-  // Set up periodic expiry check
-  useEffect(() => {
-    const checkExpiredUrls = () => {
+    // Return items with processing - async will happen in parallel
+    return items.map((item) => {
+      const cacheKey = `${item.id}:${item.url}`;
+      const cached = processedCacheRef.current.get(cacheKey);
       const now = Date.now();
-      let hasExpired = false;
       
-      // Check for expired URLs and remove them from cache (with config buffer)
-      for (const [key, cached] of processedCacheRef.current.entries()) {
-        if (cached.expiresAt <= now + getUrlExpiryBuffer() * 1000) { // Use config buffer
-          processedCacheRef.current.delete(key);
-          hasExpired = true;
-        }
+      // Check cache first
+      if (cached && cached.expiresAt > now) {
+        return { ...item, processedUrl: cached.url };
+      }
+      if (failedCacheRef.current.has(cacheKey)) {
+        return { ...item, processedUrl: item.url };
+      }
+
+      // Handle different URL types
+      if (item.url.startsWith('blob:') || item.url.includes('?token=')) {
+        return { ...item, processedUrl: item.url };
+      }
+
+      // For other URLs, start async processing but return original for now
+      const ref = extractStorageRef(item.url);
+      if (ref) {
+        getUrl(ref.bucket, ref.path).then((resolvedUrl) => {
+          processedCacheRef.current.set(cacheKey, {
+            url: resolvedUrl,
+            expiresAt: now + (storageConfig.defaults.signedUrlExpiry * 1000),
+          });
+          // Trigger re-render by updating state
+          setFailedUrls(prev => new Set(prev));
+        }).catch(() => {
+          failedCacheRef.current.add(cacheKey);
+        });
       }
       
-      // If any URLs expired, trigger reprocessing
-      if (hasExpired && items && items.length > 0) {
-        // This will trigger the main processing useEffect
-        setProcessedItems([]);
-      }
-    };
-
-    // Check immediately
-    checkExpiredUrls();
-    
-    // Set up interval to check using config value
-    expiryCheckIntervalRef.current = setInterval(checkExpiredUrls, getUrlCheckInterval() * 1000);
-
-    return () => {
-      if (expiryCheckIntervalRef.current) {
-        clearInterval(expiryCheckIntervalRef.current);
-        expiryCheckIntervalRef.current = null;
-      }
-    };
-  }, [items]);
+      return { ...item, processedUrl: item.url };
+    });
+  }, [items, getUrl]);
 
   if (!items || items.length === 0) {
     return <div className="hidden" />;
@@ -208,23 +121,14 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
   const handleImageError = useCallback((url: string) => {
     setFailedUrls((prev) => new Set(prev).add(url));
-    setLoadingImages((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(url);
-      return newSet;
-    });
   }, []);
 
   const handleImageLoad = useCallback((url: string) => {
-    setLoadingImages((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(url);
-      return newSet;
-    });
+    // Image loaded successfully - no action needed
   }, []);
 
   const handleImageLoadStart = useCallback((url: string) => {
-    setLoadingImages((prev) => new Set(prev).add(url));
+    // Image started loading - no action needed
   }, []);
 
   const activeMedia = useMemo(() => 
@@ -259,7 +163,6 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const renderItem = useCallback((item: AttachmentWithUrl, index: number, isLarge = false) => {
     const itemUrl = item.processedUrl || item.url;
     const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
-    const isLoading = loadingImages.has(itemUrl);
 
     return (
       <div
@@ -297,24 +200,17 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
                 </div>
               </div>
             ) : (
-              <>
-                {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 z-10">
-                    <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
-                  </div>
-                )}
-                <Image
-                  src={itemUrl}
-                  alt=""
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  unoptimized
-                  onLoadStart={() => handleImageLoadStart(itemUrl)}
-                  onLoad={() => handleImageLoad(itemUrl)}
-                  onError={() => handleImageError(itemUrl)}
-                  sizes="(max-width: 768px) 280px, 400px"
-                />
-              </>
+              <Image
+                src={itemUrl}
+                alt=""
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                unoptimized
+                onLoadStart={() => handleImageLoadStart(itemUrl)}
+                onLoad={() => handleImageLoad(itemUrl)}
+                onError={() => handleImageError(itemUrl)}
+                sizes="(max-width: 768px) 280px, 400px"
+              />
             )}
             {index === 3 && activeCount > 4 && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white z-10">
@@ -325,7 +221,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         )}
       </div>
     );
-  }, [failedUrls, loadingImages, handleMediaClick, handleImageLoad, handleImageError, handleImageLoadStart, activeCount]);
+  }, [failedUrls, handleMediaClick, handleImageLoad, handleImageError, handleImageLoadStart, activeCount]);
 
   return (
     <>
@@ -365,26 +261,19 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
                     <track kind="captions" />
                   </video>
                 ) : (
-                  <>
-                    {loadingImages.has(processedItems[0].processedUrl || processedItems[0].url) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 z-10">
-                        <Loader2 className="w-8 h-8 text-neutral-400 animate-spin" />
-                      </div>
-                    )}
-                    <Image
-                      src={processedItems[0].processedUrl || processedItems[0].url}
-                      alt=""
-                      fill
-                      className="object-contain bg-neutral-900/10"
-                      unoptimized
-                      onLoadStart={() => handleImageLoadStart(processedItems[0].processedUrl || processedItems[0].url)}
-                      onLoad={() => handleImageLoad(processedItems[0].processedUrl || processedItems[0].url)}
-                      onError={() =>
-                        handleImageError(processedItems[0].processedUrl || processedItems[0].url)
-                      }
-                      sizes="(max-width: 768px) 280px, 400px"
-                    />
-                  </>
+                  <Image
+                    src={processedItems[0].processedUrl || processedItems[0].url}
+                    alt=""
+                    fill
+                    className="object-contain bg-neutral-900/10"
+                    unoptimized
+                    onLoadStart={() => handleImageLoadStart(processedItems[0].processedUrl || processedItems[0].url)}
+                    onLoad={() => handleImageLoad(processedItems[0].processedUrl || processedItems[0].url)}
+                    onError={() =>
+                      handleImageError(processedItems[0].processedUrl || processedItems[0].url)
+                    }
+                    sizes="(max-width: 768px) 280px, 400px"
+                  />
                 )}
               </button>
             )}

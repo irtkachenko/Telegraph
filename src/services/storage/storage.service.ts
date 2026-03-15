@@ -143,13 +143,15 @@ export const storageApi = {
    */
   uploadAttachment: async (file: File, chatId: string, userId: string) => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substr(2, 9);
+    const fileName = `${timestamp}-${randomSuffix}.${fileExt}`;
     const filePath = `${chatId}/${userId}/${fileName}`;
 
-    // Завантажуємо файл
+    // Завантажуємо файл з upsert: true для обробки дублікатів
     await storageApi.uploadFile('attachments', filePath, file, {
       cacheControl: '3600',
-      upsert: false,
+      upsert: true,
     });
 
     // Отримуємо signed URL для приватного bucket
