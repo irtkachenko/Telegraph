@@ -3,11 +3,9 @@
 import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import {
-  getFileTypeCategory,
-  isAllowedFileExtension,
-  storageConfig,
-} from '@/config/storage.config';
+import { storageConfig } from '@/config/storage.config';
+import { getFileTypeCategory } from '@/utils/file-types';
+import { isAllowedFileExtension } from '@/utils/file-validation';
 import { storageApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';

@@ -35,6 +35,7 @@ export default function ChatInput({
   onMessageSent,
 }: ChatInputProps) {
   const [content, setContent] = useState('');
+  const { user } = useSupabaseAuth();
   const { attachments, addFiles, removeAttachment, clearAttachments, hasAttachments } =
     useOptimisticAttachmentLazy();
   const { data: storageConfig } = useStorageConfig();
@@ -174,6 +175,7 @@ export default function ChatInput({
         editingMessage={editingMessage || null}
         onEditCancel={onEditCancel}
         otherParticipantName="Співрозмовник"
+        currentUserId={user?.id}
       />
 
       <form onSubmit={handleSubmit} className="p-3 sm:p-4 flex gap-2 items-end">

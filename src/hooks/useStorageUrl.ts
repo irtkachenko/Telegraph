@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
+import { type StorageConfig, storageConfig } from '@/config/storage.config';
 import { storageApi } from '@/services';
 import { AuthError, NetworkError } from '@/shared/lib/errors';
 

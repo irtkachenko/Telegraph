@@ -70,16 +70,6 @@ export const realtimeApi = {
   },
 
   /**
-   * Subscribe to presence sync, join, and leave events
-   */
-  subscribeToPresence: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    channel.on('presence', { event: 'sync' }, callback);
-    channel.on('presence', { event: 'join' }, callback);
-    channel.on('presence', { event: 'leave' }, callback);
-    return channel;
-  },
-
-  /**
    * Subscribe to chat list updates
    */
   subscribeToChats: (

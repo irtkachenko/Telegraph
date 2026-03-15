@@ -13,6 +13,7 @@ interface ComposerAddonsProps {
   attachments: OptimisticAttachment[];
   onAttachmentRemove: (id: string) => void;
   otherParticipantName?: string;
+  currentUserId?: string;
 }
 
 export default function ComposerAddons({
@@ -23,6 +24,7 @@ export default function ComposerAddons({
   attachments,
   onAttachmentRemove,
   otherParticipantName,
+  currentUserId,
 }: ComposerAddonsProps) {
   if (!replyTo && !editingMessage && attachments.length === 0) return null;
 
@@ -53,7 +55,7 @@ export default function ComposerAddons({
         <div className="flex items-center gap-3 py-2 border-s-4 border-blue-500 px-3 bg-blue-500/5 rounded-e-lg relative group">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-blue-400">
-              {replyTo.sender_id === 'me'
+              {currentUserId && replyTo.sender_id === currentUserId
                 ? 'Reply to yourself'
                 : `Reply to ${otherParticipantName || 'user'}`}
             </p>

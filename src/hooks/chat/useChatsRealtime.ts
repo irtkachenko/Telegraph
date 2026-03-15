@@ -3,7 +3,7 @@
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { realtimeApi } from '@/services';
+import { realtimeApi, type RealtimeMessagePayload } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat, Message } from '@/types';
@@ -13,7 +13,7 @@ interface MessagePayload {
   id: string;
   chat_id: string;
   sender_id: string;
-  content: string;
+  content: string | null;
   created_at: string;
   updated_at?: string | null;
   attachments?: Message['attachments'];
@@ -56,22 +56,14 @@ export function useChatsRealtime(user: User | null) {
 
     const channel = realtimeApi.createMessagesChannel();
 
-    const handleInsert = (payload: RealtimePayload<MessagePayload>) => {
-      if (!validatePayload(payload, ['id', 'chat_id', 'sender_id', 'content', 'created_at'])) {
-        return;
-      }
-
-      const newMessage = payload.new;
-      if (!newMessage?.chat_id) return;
-
-      const normalizedMessage = {
-        ...(newMessage as Message),
-        attachments: (newMessage.attachments as Message['attachments']) || [],
-      } as Message;
+    const handleInsert = (payload: RealtimeMessagePayload) => {
+      if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
+      
+      const newMessage = payload.new as Message;
 
       // 1. Update chat list (last message preview)
       queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
-        upsertChatLastMessage(old, newMessage.chat_id, normalizedMessage),
+        upsertChatLastMessage(old, newMessage.chat_id, newMessage),
       );
 
       // 2. Update specific chat messages cache
@@ -80,23 +72,22 @@ export function useChatsRealtime(user: User | null) {
 
         // Check for duplicates (if we sent the message ourselves and already have an optimistic or real entry)
         const exists = old.pages.some((page: Message[]) =>
-          page.some((m) => m.id === normalizedMessage.id),
+          page.some((m) => m.id === newMessage.id),
         );
         if (exists) return old;
 
         const newPages = [...old.pages];
         const lastPageIdx = newPages.length - 1;
-        newPages[lastPageIdx] = [...newPages[lastPageIdx], normalizedMessage];
+        newPages[lastPageIdx] = [...newPages[lastPageIdx], newMessage];
 
         return { ...old, pages: newPages };
       });
     };
 
-    const handleUpdate = (payload: RealtimePayload<MessagePayload>) => {
-      if (!validatePayload(payload, ['id', 'chat_id'])) {
-        return;
-      }
-      const updatedMessage = payload.new;
+    const handleUpdate = (payload: RealtimeMessagePayload) => {
+      if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
+      
+      const updatedMessage = payload.new as Message;
       if (!updatedMessage?.id || !updatedMessage?.chat_id) return;
 
       const normalizedMessage = {
@@ -126,12 +117,11 @@ export function useChatsRealtime(user: User | null) {
       });
     };
 
-    const handleDelete = (payload: RealtimePayload<MessagePayload>) => {
-      if (!validatePayload(payload, [])) {
-        return;
-      }
-      const deletedId = payload.old?.id;
-      const deletedChatId = payload.old?.chat_id;
+    const handleDelete = (payload: RealtimeMessagePayload) => {
+      if (!payload.old || typeof payload.old !== 'object' || !('id' in payload.old)) return;
+      
+      const deletedId = payload.old.id as string;
+      const deletedChatId = payload.old.chat_id as string;
       if (!deletedId || !deletedChatId) return;
 
       // 1. Update chat list
@@ -157,7 +147,7 @@ export function useChatsRealtime(user: User | null) {
       });
     };
 
-    realtimeApi.subscribeToAllMessages(channel, (payload: RealtimePayload<MessagePayload>) => {
+    realtimeApi.subscribeToAllMessages(channel, (payload: RealtimeMessagePayload) => {
       try {
         switch (payload.eventType) {
           case 'INSERT':
@@ -172,16 +162,13 @@ export function useChatsRealtime(user: User | null) {
         }
       } catch (error) {
         handleError(
-          error instanceof Error
-            ? error
-            : new NetworkError(
-                'Realtime message handling failed',
-                'realtime',
-                'REALTIME_ERROR',
-                500,
-              ),
-          'ChatsRealtime',
-          { enableToast: false },
+          new NetworkError(
+            'Failed to process realtime message',
+            'realtime',
+            'REALTIME_MESSAGE_ERROR',
+            500,
+          ),
+          'useChatsRealtime',
         );
       }
     });

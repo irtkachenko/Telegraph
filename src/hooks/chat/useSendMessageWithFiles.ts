@@ -4,7 +4,7 @@ import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-
 import imageCompression from 'browser-image-compression';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { isAllowedFileExtension } from '@/config/storage.config';
+import { isAllowedFileExtension } from '@/utils/file-validation';
 import { useStorageLimits } from '@/hooks/useDynamicStorageConfig';
 import { messagesApi, storageApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
