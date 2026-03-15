@@ -23,5 +23,5 @@ export function useGlobalRealtime(user: User | null) {
     return () => {
       unsubscribe();
     };
-  }, [user?.id, subscribe, unsubscribe]);
+  }, [user, subscribe, unsubscribe]);
 }

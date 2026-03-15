@@ -1,49 +1,33 @@
 import { NextResponse } from 'next/server';
+import { storageConfig } from '@/config/storage.config';
 import { createClient } from '@/lib/supabase/server';
-
-interface BucketConfig {
-  name: string;
-  public: boolean;
-  createdAt: string;
-}
-
-interface StorageLimits {
-  maxFileSize: string;
-  allowedTypes: string[];
-  signedUrlExpiry: number;
-}
-
-interface StorageConfigResponse {
-  buckets: BucketConfig[];
-  limits: StorageLimits;
-}
 
 export async function GET() {
   try {
     const supabase = await createClient();
+    const { data: bucket, error } = await supabase.storage.getBucket(
+      storageConfig.buckets.attachments.name,
+    );
 
-    const { data: bucket, error } = await supabase.storage.getBucket('attachments');
-
+    // If bucket not found or error, return defaults from static config
     if (error || !bucket) {
-      const fallbackConfig: StorageConfigResponse = {
+      return NextResponse.json({
         buckets: [
           {
-            name: 'attachments',
-            public: true,
+            name: storageConfig.buckets.attachments.name,
+            public: !storageConfig.buckets.attachments.isPrivate,
             createdAt: new Date().toISOString(),
           },
         ],
         limits: {
-          maxFileSize: '52428800',
-          allowedTypes: ['image/*', 'video/*', 'application/pdf'],
-          signedUrlExpiry: 3600,
+          maxFileSize: String(storageConfig.buckets.attachments.maxFileSize),
+          allowedTypes: storageConfig.buckets.attachments.allowedExtensions.map((ext) => `.${ext}`),
+          signedUrlExpiry: storageConfig.defaultSignedUrlExpiry,
         },
-      };
-
-      return NextResponse.json(fallbackConfig);
+      });
     }
 
-    const config: StorageConfigResponse = {
+    const config = {
       buckets: [
         {
           name: bucket.name,
@@ -52,12 +36,14 @@ export async function GET() {
         },
       ],
       limits: {
-        maxFileSize: String(bucket.file_size_limit ?? '52428800'),
+        maxFileSize: String(
+          bucket.file_size_limit ?? storageConfig.buckets.attachments.maxFileSize,
+        ),
         allowedTypes:
           Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
             ? bucket.allowed_mime_types
-            : ['image/*', 'video/*', 'application/pdf'],
-        signedUrlExpiry: 3600,
+            : storageConfig.buckets.attachments.allowedExtensions.map((ext) => `.${ext}`),
+        signedUrlExpiry: storageConfig.defaultSignedUrlExpiry,
       },
     };
 

@@ -1,27 +1,10 @@
-'use client';
 import { useQuery } from '@tanstack/react-query';
-
-interface BucketConfig {
-  name: string;
-  public: boolean;
-  createdAt: string;
-}
-
-interface StorageLimits {
-  maxFileSize: string;
-  allowedTypes: string[];
-  signedUrlExpiry: number;
-}
-
-export interface StorageConfig {
-  buckets: BucketConfig[];
-  limits: StorageLimits;
-}
+import type { StorageConfigResponse } from '@/config/storage.config';
 
 export function useStorageConfig() {
   return useQuery({
     queryKey: ['storage-config'],
-    queryFn: async (): Promise<StorageConfig> => {
+    queryFn: async (): Promise<StorageConfigResponse> => {
       const response = await fetch('/api/storage/config');
       if (!response.ok) {
         throw new Error('Failed to fetch storage config');

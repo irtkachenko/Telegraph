@@ -6,13 +6,14 @@ import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { messagesApi } from '@/services';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
+import { monitorAPICall } from '@/lib/performance';
 
 /**
- * Хук для отримання повідомлень чату з підтримкою нескінченної пагінації.
+ * Hook for fetching and managing chat messages with infinite scroll and auto-read logic.
  */
 export function useMessages(chatId: string) {
   const { user } = useSupabaseAuth();
-  const markAsReadMutation = useMarkAsRead();
+  const { mutate: markAsRead } = useMarkAsRead();
   const lastProcessedId = useRef<string | null>(null);
 
   const query = useInfiniteQuery<
@@ -26,7 +27,9 @@ export function useMessages(chatId: string) {
     queryFn: async ({ pageParam }: { pageParam?: string }) => {
       if (!chatId) return [];
 
-      return await messagesApi.getMessages(chatId, pageParam);
+      return await monitorAPICall('getMessages')(() => 
+        messagesApi.getMessages(chatId, pageParam)
+      );
     },
     initialPageParam: undefined,
     getPreviousPageParam: (firstPage): string | undefined => {
@@ -38,73 +41,45 @@ export function useMessages(chatId: string) {
     refetchOnWindowFocus: false,
   });
 
-  // Отримуємо всі повідомлення в мемоїзованому вигляді
+  // Get all messages in a flattened memoized format
   const allMessages = useMemo(() => query.data?.pages.flat() || [], [query.data?.pages]);
 
-  // Debug для пагінації повідомлень
-  console.log('📄 Message pagination:', {
-    pagesCount: query.data?.pages.length || 0,
-    pagesLengths: query.data?.pages.map((p) => p.length) || [],
-    totalAfterFlat: allMessages.length,
-  });
-
-  // Debug лог для Virtuoso
+  // Filter and deduplicate messages
   const validMessages = useMemo(() => {
-    // Фільтруємо некоректні optimistic messages
     const filtered = allMessages.filter((msg) => {
       if (!msg?.id) return false;
 
-      // Якщо це optimistic message, перевіряємо цілісність
+      // Validate optimistic message integrity
       if (msg.is_optimistic) {
         const hasValidContent = msg.content && msg.content.trim().length > 0;
         const hasValidAttachments = msg.attachments && msg.attachments.length > 0;
-
-        // Повідомлення з картинками повинні мати або контент, або коректні attachments
-        if (!hasValidContent && !hasValidAttachments) {
-          console.warn('🚫 Filtering invalid optimistic message:', msg);
-          return false;
-        }
+        if (!hasValidContent && !hasValidAttachments) return false;
       }
 
       return true;
     });
 
-    const duplicateCheck = new Set(filtered.map((m) => m.id)).size !== filtered.length;
-
-    console.log('🔍 Messages for Virtuoso:', {
-      total: allMessages.length,
-      valid: filtered.length,
-      ids: filtered.slice(0, 5).map((m) => m.id), // Перші 5 ID для економії місця
-      hasDuplicates: duplicateCheck,
-      firstMessage: filtered[0],
-      lastMessage: filtered[filtered.length - 1],
-    });
-
-    if (duplicateCheck) {
-      console.error('❌ DUPLICATE MESSAGE IDS DETECTED!');
+    // Deduplication by id (keep the latest entry)
+    const seen = new Map<string, Message>();
+    for (const msg of filtered) {
+      seen.set(msg.id, msg);
     }
 
-    // Захист від порожніх даних
-    if (filtered.length === 0) {
-      console.log('📭 No messages to render, returning empty array');
-      return [];
-    }
-
-    return filtered;
+    return Array.from(seen.values());
   }, [allMessages]);
 
-  // Автоматичне прочитування нових повідомлень
+  // Auto-mark incoming messages as read
   useEffect(() => {
     if (allMessages.length === 0 || !user?.id) return;
 
-    // Шукаємо останнє повідомлення НЕ від поточного користувача
-    const latestIncomingMessage = [...allMessages].reverse().find((m) => m.sender_id !== user.id);
+    // Find the latest message NOT sent by current user
+    const latestIncomingMessage = allMessages.findLast((m) => m.sender_id !== user.id);
 
     if (latestIncomingMessage && lastProcessedId.current !== latestIncomingMessage.id) {
       lastProcessedId.current = latestIncomingMessage.id;
-      markAsReadMutation.mutate({ chatId, messageId: latestIncomingMessage.id });
+      markAsRead({ chatId, messageId: latestIncomingMessage.id });
     }
-  }, [allMessages, user?.id, chatId, markAsReadMutation]);
+  }, [allMessages, user?.id, chatId, markAsRead]);
 
   return { ...query, messages: validMessages };
 }

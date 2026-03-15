@@ -7,7 +7,7 @@ import { AuthError, NetworkError } from '@/shared/lib/errors';
 import type { FullChat, User } from '@/types';
 
 /**
- * Хук для отримання детальної інформації про конкретний чат.
+ * Hook for fetching detailed information about a specific chat.
  */
 export function useChatDetails(chatId: string) {
   const { user } = useSupabaseAuth();

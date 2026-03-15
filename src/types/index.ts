@@ -1,7 +1,35 @@
-import type { AppUser } from './auth';
 import type { Database } from './supabase';
 
-// Define Attachment interface inline to avoid circular import
+/**
+ * Metadata from various OAuth providers
+ */
+export interface UserMetadata {
+  name?: string;
+  full_name?: string;
+  avatar_url?: string;
+  picture?: string;
+  provider?: string;
+}
+
+/**
+ * Combined user type merging Supabase Auth and Database profile
+ */
+export interface AppUser {
+  id: string;
+  email: string;
+  email_confirmed_at?: string;
+  phone?: string;
+  user_metadata: UserMetadata;
+  name: string | null;
+  image: string | null;
+  last_seen: string | null;
+  is_online: boolean;
+  display_name: string;
+}
+
+/**
+ * Centralized Attachment interface
+ */
 export interface Attachment {
   id: string;
   type: 'image' | 'video' | 'file';
@@ -16,9 +44,8 @@ export interface Attachment {
   };
 }
 
-// Експортуємо AppUser як User для сумісності
+// Export AppUser as User for backward compatibility
 export type User = AppUser;
-export type { AppUser };
 export type Chat = Database['public']['Tables']['chats']['Row'];
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   // Override attachments to be properly typed

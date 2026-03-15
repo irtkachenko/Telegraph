@@ -172,10 +172,6 @@ export const RATE_LIMITS = {
 export const rateLimitUtils = {
   cleanup: () => rateLimiter.cleanup(),
   getStats: () => rateLimiter.getStats(),
-  clearUserLimits: (userId: string) => {
-    // Implementation for clearing specific user limits
-    // This would need to be added to the RateLimiter class
-  },
 };
 
 /**

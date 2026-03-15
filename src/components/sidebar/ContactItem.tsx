@@ -2,14 +2,12 @@
 
 import { Loader2, MessageSquarePlus, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { memo } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useGetOrCreateChat } from '@/hooks/chat/useGetOrCreateChat';
 import { formatRelativeTime } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
-import { handleError } from '@/shared/lib/error-handler';
-import { NetworkError } from '@/shared/lib/errors';
+
 import type { User } from '@/types';
 
 import { PresenceIndicator } from './PresenceIndicator';

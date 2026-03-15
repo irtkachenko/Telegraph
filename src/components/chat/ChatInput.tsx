@@ -3,6 +3,7 @@
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage } from '@/hooks/chat';
 import { useSendMessageWithFiles } from '@/hooks/chat/useSendMessageWithFiles';
@@ -33,18 +34,10 @@ export default function ChatInput({
   onEditCancel, // Added onEditCancel prop
   onMessageSent,
 }: ChatInputProps) {
-  const { user } = useSupabaseAuth(); // Ensure user is available if needed, though useSendMessage handles it
   const [content, setContent] = useState('');
-  const {
-    attachments,
-    addFile,
-    addFiles,
-    removeAttachment,
-    clearAttachments,
-    hasAttachments,
-    totalSize,
-  } = useOptimisticAttachmentLazy();
-  const { data: storageConfig, isLoading } = useStorageConfig();
+  const { attachments, addFiles, removeAttachment, clearAttachments, hasAttachments } =
+    useOptimisticAttachmentLazy();
+  const { data: storageConfig } = useStorageConfig();
 
   // Використовуємо новий хук для паралельної відправки з файлами
   const sendMessageWithFiles = useSendMessageWithFiles(chatId);
@@ -80,6 +73,8 @@ export default function ChatInput({
 
   useEffect(() => {
     adjustTextareaHeight();
+    // We want to adjust height whenever content changes
+    // biome-ignore lint/correctness/useExhaustiveDependencies: content is needed to trigger the effect
   }, [content, adjustTextareaHeight]);
 
   // Знаходимо повідомлення для реплаю в кеші
@@ -95,7 +90,7 @@ export default function ChatInput({
     const trimmed = content.trim();
     const hasFiles = attachments.length > 0;
 
-    // Валідація
+    // Валідація - якщо немає ні тексту, ні файлів, не відправляємо
     if (!trimmed && !hasFiles) return;
 
     // 1. Очищуємо UI миттєво (для відчуття швидкості)
@@ -109,6 +104,12 @@ export default function ChatInput({
     try {
       if (editingMessage) {
         // РЕДАГУВАННЯ (файли не підтримуються при редагуванні)
+        if (!trimmed) {
+          toast.error('Повідомлення не може бути порожнім');
+          setContent(trimmed);
+          return;
+        }
+
         await editMessage.mutateAsync({
           messageId: editingMessage.id,
           content: trimmed,
@@ -126,7 +127,7 @@ export default function ChatInput({
       }
 
       if (onMessageSent) onMessageSent();
-    } catch (error) {
+    } catch (_error) {
       // Якщо впало — повертаємо текст назад, щоб юзер не втратив повідомлення
       handleError(
         new NetworkError('Failed to process message', 'message', 'MESSAGE_PROCESS_ERROR', 500),

@@ -42,13 +42,20 @@ function createPresenceManager(): PresenceManager {
   };
 }
 
-function updateLastSeen(): Promise<void> {
-  return supabase.rpc('update_last_seen');
+async function updateLastSeen(): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('update_last_seen');
+    if (error) {
+      console.warn('Failed to update last seen:', error.message);
+    }
+  } catch {
+    // Silently fail — this is best-effort
+  }
 }
 
 function handleVisibilityChange(): void {
   if (document.visibilityState === 'hidden') {
-    updateLastSeen();
+    void updateLastSeen();
   }
 }
 
@@ -172,8 +179,6 @@ export function usePresence() {
 // Global manager instance to ensure only one connection exists
 let globalManager: PresenceManager | null = null;
 
-const globalManagerRef: { current: PresenceManager | null } = { current: null };
-
 function getOrCreateManager(
   userId: string,
   setOnlineUsers: (users: Set<string>) => void,
@@ -194,9 +199,8 @@ function getOrCreateManager(
 
   // Add global event listeners
   window.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('beforeunload', updateLastSeen);
+  window.addEventListener('beforeunload', () => void updateLastSeen());
 
-  globalManagerRef.current = globalManager;
   return globalManager;
 }
 
@@ -247,7 +251,7 @@ function cleanupPresence(): void {
   }
 
   // Update last seen before disconnecting
-  updateLastSeen();
+  void updateLastSeen();
 
   // Stop heartbeat
   stopHeartbeat(manager);
@@ -260,11 +264,9 @@ function cleanupPresence(): void {
 
   // Remove global event listeners
   window.removeEventListener('visibilitychange', handleVisibilityChange);
-  window.removeEventListener('beforeunload', updateLastSeen);
 
   // Reset global state
   globalManager = null;
-  globalManagerRef.current = null;
 
   // Update store state
   usePresenceStore.getState().setConnectionState('DISCONNECTED');

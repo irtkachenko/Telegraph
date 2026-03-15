@@ -6,7 +6,7 @@ import type { Attachment, Message } from '@/types';
 
 export const messagesApi = {
   /**
-   * Отримання повідомлень чату з підтримкою пагінації
+   * Fetch chat messages with pagination support
    */
   getMessages: withRateLimitFn(
     async (chatId: string, cursor?: string) => {
@@ -34,14 +34,14 @@ export const messagesApi = {
         attachments: msg.attachments || [],
       }));
 
-      // Повертаємо в правильному порядку для Virtuoso
+      // Return in reverse order for Virtuoso list
       return normalizedData.reverse();
     },
-    { ...RATE_LIMITS.MESSAGE_SEND, name: 'getMessages' },
+    { ...RATE_LIMITS.MESSAGE_READ, name: 'getMessages' },
   ),
 
   /**
-   * Відправка повідомлення
+   * Send a new message
    */
   sendMessage: withRateLimitFn(
     async (
@@ -81,7 +81,7 @@ export const messagesApi = {
   ),
 
   /**
-   * Видалення повідомлення
+   * Delete a message
    */
   deleteMessage: withRateLimitFn(
     async (messageId: string, chatId: string) => {
@@ -99,7 +99,7 @@ export const messagesApi = {
   ),
 
   /**
-   * Редагування повідомлення
+   * Edit an existing message
    */
   editMessage: withRateLimitFn(
     async (messageId: string, content: string) => {
@@ -117,14 +117,14 @@ export const messagesApi = {
   ),
 
   /**
-   * Позначення повідомлення як прочитаного
+   * Mark a message as read utilizing the SQL RPC function
    */
   markAsRead: withRateLimitFn(
     async (chatId: string, messageId: string, userId: string) => {
-      const { error } = await supabase.from('message_reads').insert({
-        chat_id: chatId,
-        message_id: messageId,
-        user_id: userId,
+      const { error } = await supabase.rpc('mark_chat_as_read', {
+        p_chat_id: chatId,
+        p_message_id: messageId,
+        p_user_id: userId,
       });
 
       if (error) throw error;

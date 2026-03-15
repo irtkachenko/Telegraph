@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type SearchInput, searchSchema } from '@/lib/validations/chat';
+import { searchSchema } from '@/lib/validations/chat';
 
 /**
  * Custom hook for debounced search with validation

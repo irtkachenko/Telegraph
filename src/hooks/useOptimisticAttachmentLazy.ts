@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { isAllowedFileExtension, storageConfig } from '@/config/storage.config';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 import { useStorageLimits } from './useDynamicStorageConfig';
+import { usePerformanceMonitor } from '@/lib/performance';
 
 export interface LazyAttachment {
   id: string;
@@ -25,6 +27,13 @@ export function useOptimisticAttachmentLazy() {
   const [attachments, setAttachments] = useState<LazyAttachment[]>([]);
   const { user } = useSupabaseAuth();
   const { validateFile, validateFiles } = useStorageLimits();
+  
+  // Performance monitoring
+  usePerformanceMonitor('useOptimisticAttachmentLazy');
+
+  // Константи для лімітів
+  const MAX_FILES_PER_MESSAGE = 4; // Змінено на 4 файли
+  const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
 
   // Очищення URL-прев'ю при розмонтуванні компонента
   useEffect(() => {
@@ -85,23 +94,63 @@ export function useOptimisticAttachmentLazy() {
   };
 
   const addFiles = async (files: File[]): Promise<LazyAttachment[]> => {
-    // Валідація групи файлів
-    const groupValidation = validateFiles(files);
-    if (!groupValidation.valid) {
-      handleError(
-        new ValidationError(
-          groupValidation.error || 'Помилка валідації файлів',
-          'files',
-          'FILES_VALIDATION_ERROR',
-          400,
-        ),
-        'OptimisticAttachmentLazy',
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    // Перевіряємо кожен файл окремо
+    for (const file of files) {
+      const validation = validateFile(file);
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        errors.push(`${file.name}: ${validation.error}`);
+      }
+    }
+
+    // Перевіряємо ліміти ПРИ ДОДАВАННІ файлів
+    const currentFilesCount = attachments.length;
+    const currentTotalSize = attachments.reduce((sum, a) => sum + a.metadata.size, 0);
+
+    const allowedFiles: File[] = [];
+    const rejectedFiles: File[] = [];
+
+    // Розраховуємо скільки файлів можна додати
+    const remainingSlots = MAX_FILES_PER_MESSAGE - currentFilesCount;
+    const remainingSize = MAX_TOTAL_SIZE - currentTotalSize;
+
+    let addedSize = 0;
+    for (const file of validFiles) {
+      if (allowedFiles.length >= remainingSlots || addedSize + file.size > remainingSize) {
+        rejectedFiles.push(file);
+      } else {
+        allowedFiles.push(file);
+        addedSize += file.size;
+      }
+    }
+
+    // Показуємо помилки про перевищення лімітів
+    if (rejectedFiles.length > 0) {
+      const rejectedNames = rejectedFiles.map((f) => f.name).join(', ');
+      toast.error(
+        `Забагато файлів! Максимально 4 файли на повідомлення. Не додано: ${rejectedNames}`,
       );
+    }
+
+    if (errors.length > 0) {
+      toast.error(`Помилки валідації: ${errors.join(', ')}`);
+    }
+
+    // Якщо є помилки валідації окремих файлів (не ліміти)
+    if (errors.length > 0 && rejectedFiles.length === 0) {
       return [];
     }
 
-    const results = await Promise.allSettled(files.map((file) => addFile(file)));
+    // Додаємо тільки дозволені файли
+    if (allowedFiles.length === 0) {
+      return [];
+    }
 
+    const results = await Promise.allSettled(allowedFiles.map((file) => addFile(file)));
     return results
       .filter(
         (result): result is PromiseFulfilledResult<LazyAttachment> =>

@@ -1,13 +1,30 @@
 // Centralized storage configuration for the application
 
+export interface BucketConfig {
+  name: string;
+  isPrivate: boolean;
+  maxFileSize: number; // in bytes
+  allowedExtensions: string[];
+}
+
+export interface StorageLimits {
+  maxFileSize: string;
+  allowedTypes: string[];
+  signedUrlExpiry: number;
+}
+
+export interface StorageConfigResponse {
+  buckets: {
+    name: string;
+    public: boolean;
+    createdAt: string;
+  }[];
+  limits: StorageLimits;
+}
+
 export interface StorageConfig {
   buckets: {
-    attachments: {
-      name: string;
-      isPrivate: boolean;
-      maxFileSize: number; // in bytes
-      allowedExtensions: string[];
-    };
+    attachments: BucketConfig;
   };
   fileTypes: {
     images: {

@@ -1,24 +1,37 @@
-import type { RealtimeChannel, RealtimeChannelSendResponse } from '@supabase/supabase-js';
+import type {
+  RealtimeChannel,
+  RealtimeChannelSendResponse,
+  RealtimePostgresChangesPayload,
+} from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
+import type { Chat, Message, User } from '@/types';
+
+export type RealtimeChatPayload = RealtimePostgresChangesPayload<Chat>;
+export type RealtimeMessagePayload = RealtimePostgresChangesPayload<Message>;
+export type RealtimeUserPayload = RealtimePostgresChangesPayload<User>;
 
 export const realtimeApi = {
   /**
-   * Створення глобального каналу для повідомлень
+   * Create a global channel for message updates
    */
   createMessagesChannel: (): RealtimeChannel => {
     return supabase.channel('messages:global');
   },
+
   /**
-   * Створення каналу для чату
+   * Create a specific chat channel
    */
   createChatChannel: (chatId: string): RealtimeChannel => {
     return supabase.channel(`chat:${chatId}`);
   },
 
   /**
-   * Підписка на повідомлення чату
+   * Subscribe to messages in a specific channel
    */
-  subscribeToMessages: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+  subscribeToMessages: (
+    channel: RealtimeChannel,
+    callback: (payload: RealtimeMessagePayload) => void,
+  ) => {
     return channel.on(
       'postgres_changes',
       {
@@ -32,9 +45,12 @@ export const realtimeApi = {
   },
 
   /**
-   * Глобальна підписка на всі повідомлення (RLS фільтрує доступні рядки)
+   * Global subscription to all messages (RLS filters rows automatically)
    */
-  subscribeToAllMessages: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+  subscribeToAllMessages: (
+    channel: RealtimeChannel,
+    callback: (payload: RealtimeMessagePayload) => void,
+  ) => {
     return channel.on(
       'postgres_changes',
       {
@@ -47,26 +63,29 @@ export const realtimeApi = {
   },
 
   /**
-   * Підписка на статус набирання тексту
+   * Subscribe to typing indicators via broadcast
    */
-  subscribeToTyping: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+  subscribeToTyping: (channel: RealtimeChannel, callback: (payload: { payload: any }) => void) => {
     return channel.on('broadcast', { event: 'typing' }, callback);
   },
 
   /**
-   * Підписка на статус присутності
+   * Subscribe to presence sync, join, and leave events
    */
   subscribeToPresence: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    return channel
-      .on('presence', { event: 'sync' }, callback)
-      .on('presence', { event: 'join' }, callback)
-      .on('presence', { event: 'leave' }, callback);
+    channel.on('presence', { event: 'sync' }, callback);
+    channel.on('presence', { event: 'join' }, callback);
+    channel.on('presence', { event: 'leave' }, callback);
+    return channel;
   },
 
   /**
-   * Підписка на зміни в чатах
+   * Subscribe to chat list updates
    */
-  subscribeToChats: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+  subscribeToChats: (
+    channel: RealtimeChannel,
+    callback: (payload: RealtimeChatPayload) => void,
+  ) => {
     return channel.on(
       'postgres_changes',
       {
@@ -79,29 +98,33 @@ export const realtimeApi = {
   },
 
   /**
-   * Підписка на зміни в користувачах
+   * Subscribe to profile updates for a specific user
    */
-  subscribeToUsers: (channel: RealtimeChannel, callback: (payload: any) => void) => {
+  subscribeToUsers: (
+    channel: RealtimeChannel,
+    userId: string,
+    callback: (payload: RealtimeUserPayload) => void,
+  ) => {
     return channel.on(
       'postgres_changes',
       {
         event: 'UPDATE',
         schema: 'public',
         table: 'users',
-        filter: 'id=eq.current_user',
+        filter: `id=eq.${userId}`,
       },
       callback,
     );
   },
 
   /**
-   * Відправка broadcast повідомлення
+   * Broadcast a custom event to a channel
    */
-  broadcast: (
+  broadcast: async (
     channel: RealtimeChannel,
     event: string,
-    payload: any,
-  ): RealtimeChannelSendResponse => {
+    payload: Record<string, any>,
+  ): Promise<RealtimeChannelSendResponse> => {
     return channel.send({
       type: 'broadcast',
       event,
@@ -110,35 +133,35 @@ export const realtimeApi = {
   },
 
   /**
-   * Трекинг присутності користувача
+   * Track user presence state
    */
   trackPresence: (channel: RealtimeChannel, state: Record<string, any>) => {
     return channel.track(state);
   },
 
   /**
-   * Підключення каналу
+   * Activate channel subscription
    */
   subscribe: (channel: RealtimeChannel) => {
     return channel.subscribe();
   },
 
   /**
-   * Відключення каналу
+   * Remove and unsubscribe from a channel
    */
   unsubscribe: (channel: RealtimeChannel) => {
     return supabase.removeChannel(channel);
   },
 
   /**
-   * Створення глобального каналу для присутності
+   * Create a dedicated presence channel
    */
   createPresenceChannel: (): RealtimeChannel => {
     return supabase.channel('presence');
   },
 
   /**
-   * Створення глобального каналу для користувачів
+   * Create a dedicated users channel
    */
   createUsersChannel: (): RealtimeChannel => {
     return supabase.channel('users');

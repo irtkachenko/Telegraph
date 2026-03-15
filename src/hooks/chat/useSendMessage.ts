@@ -9,7 +9,7 @@ import { AuthError } from '@/shared/lib/errors';
 import type { Attachment, Message } from '@/types';
 
 /**
- * Хук для відправки повідомлень з оптимістичним оновленням.
+ * Hook for sending messages with optimistic updates.
  */
 export function useSendMessage(chatId: string) {
   const { user } = useSupabaseAuth();
@@ -20,12 +20,15 @@ export function useSendMessage(chatId: string) {
       content,
       reply_to_id,
       attachments,
+      _tempId,
     }: {
       content: string;
       reply_to_id?: string;
       attachments?: Attachment[];
+      _tempId?: string;
     }) => {
-      if (!user) throw new AuthError('Ви не авторизовані', 'SEND_MESSAGE_AUTH_REQUIRED', 401);
+      if (!user)
+        throw new AuthError('You are not authenticated', 'SEND_MESSAGE_AUTH_REQUIRED', 401);
 
       return await messagesApi.sendMessage(chatId, {
         sender_id: user.id,
@@ -39,14 +42,18 @@ export function useSendMessage(chatId: string) {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
-      // Знаходимо батьківське повідомлення для реплаю
+      // Generate a unique tempId for matching later
+      const tempId =
+        newMessage._tempId || `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      // Find parent message for reply context
       const allMessages = (previousData as InfiniteData<Message[]>)?.pages?.flat() || [];
       const parentMessage = newMessage.reply_to_id
         ? allMessages.find((m) => m.id === newMessage.reply_to_id)
         : null;
 
       const optimisticMessage: Message = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
         content: newMessage.content,
         sender_id: user?.id,
         chat_id: chatId,
@@ -54,7 +61,7 @@ export function useSendMessage(chatId: string) {
         updated_at: null,
         reply_to_id: newMessage.reply_to_id || null,
         reply_to: parentMessage,
-        attachments: newMessage.attachments || [], // Не додаємо uploading: true, щоб уникнути некоректних станів
+        attachments: newMessage.attachments || [],
         is_optimistic: true,
       } as Message;
 
@@ -65,27 +72,30 @@ export function useSendMessage(chatId: string) {
         return { ...old, pages: newPages };
       });
 
-      return { previousData };
+      return { previousData, tempId };
     },
 
-    onError: (error: Error & { status?: number }) => {
+    onError: (error: Error & { status?: number }, _variables, context) => {
+      // Restore previous cache state on error
+      if (context?.previousData) {
+        queryClient.setQueryData(['messages', chatId], context.previousData);
+      }
+
       handleError(
         new AuthError(error.message, 'SEND_MESSAGE_ERROR', error.status || 500),
         'SendMessage',
       );
     },
 
-    onSuccess: (savedMessage) => {
+    onSuccess: (savedMessage, _variables, context) => {
+      const tempId = context?.tempId;
+
       queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;
         return {
           ...old,
           pages: old.pages.map((page) =>
-            page.map((msg) =>
-              msg.id.toString().startsWith('temp-') && msg.content === savedMessage.content
-                ? savedMessage
-                : msg,
-            ),
+            page.map((msg) => (msg.id === tempId ? savedMessage : msg)),
           ),
         };
       });

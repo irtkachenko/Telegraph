@@ -1,41 +1,12 @@
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import type { User as DatabaseUser } from './index';
-
-/**
- * Повний тип користувача, що об'єднує Supabase Auth та Database
- */
-export interface AppUser {
-  // Supabase Auth поля
-  id: string;
-  email: string;
-  email_confirmed_at?: string;
-  phone?: string;
-  user_metadata: UserMetadata;
-
-  // Database поля (merged)
-  name: string | null;
-  image: string | null;
-  last_seen: string | null;
-
-  // Обчислювані поля
-  is_online: boolean;
-  display_name: string;
-}
-
-export interface UserMetadata {
-  name?: string;
-  full_name?: string;
-  avatar_url?: string;
-  picture?: string;
-  provider?: string;
-}
+import type { AppUser, UserMetadata } from './index';
 
 /**
  * Утиліти для роботи з користувачем
  */
-export class UserUtils {
-  static normalize(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): AppUser {
-    const metadata = supabaseUser.user_metadata || {};
+export const UserUtils = {
+  normalize(supabaseUser: SupabaseUser, dbUser?: Partial<AppUser> | null): AppUser {
+    const metadata = (supabaseUser.user_metadata as UserMetadata) || {};
 
     return {
       // Supabase поля
@@ -54,10 +25,10 @@ export class UserUtils {
       is_online: UserUtils.isUserOnline(dbUser?.last_seen),
       display_name: UserUtils.getDisplayName(supabaseUser, dbUser),
     };
-  }
+  },
 
-  static getDisplayName(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): string {
-    const metadata = supabaseUser.user_metadata || {};
+  getDisplayName(supabaseUser: SupabaseUser, dbUser?: Partial<AppUser> | null): string {
+    const metadata = (supabaseUser.user_metadata as UserMetadata) || {};
 
     return (
       metadata.name ||
@@ -66,35 +37,34 @@ export class UserUtils {
       supabaseUser.email?.split('@')[0] ||
       'Unknown User'
     );
-  }
+  },
 
-  static getUserImage(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): string | null {
-    const metadata = supabaseUser.user_metadata || {};
-
+  getUserImage(supabaseUser: SupabaseUser, dbUser?: Partial<AppUser> | null): string | null {
+    const metadata = (supabaseUser.user_metadata as UserMetadata) || {};
     return dbUser?.image || metadata.avatar_url || metadata.picture || null;
-  }
+  },
 
-  static isEmailVerified(supabaseUser: SupabaseUser): boolean {
+  isEmailVerified(supabaseUser: SupabaseUser): boolean {
     return !!supabaseUser.email_confirmed_at;
-  }
+  },
 
-  static isUserOnline(lastSeen?: string | null): boolean {
+  isUserOnline(lastSeen?: string | null): boolean {
     if (!lastSeen) return false;
     const lastSeenTime = new Date(lastSeen).getTime();
-    const now = new Date().getTime();
+    const now = Date.now();
     const fiveMinutesAgo = now - 5 * 60 * 1000;
     return lastSeenTime > fiveMinutesAgo;
-  }
+  },
 
-  static getInitials(name: string): string {
+  getInitials(name: string): string {
     return name
       .split(' ')
       .map((word) => word[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  }
-}
+  },
+};
 
 /**
  * Type guards для безпечної роботи
@@ -104,11 +74,11 @@ export function isAppUser(user: unknown): user is AppUser {
 }
 
 /**
- * Hook для отримання нормалізованого користувача
+ * Hook – проста обгортка над нормалізацією
  */
 export function useNormalizedUser(
   supabaseUser: SupabaseUser | null,
-  dbUser?: DatabaseUser | null,
+  dbUser?: Partial<AppUser> | null,
 ): AppUser | null {
   if (!supabaseUser) return null;
   return UserUtils.normalize(supabaseUser, dbUser);

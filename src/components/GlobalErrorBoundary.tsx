@@ -25,7 +25,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    const appError = handleError(error, 'GlobalErrorBoundary');
+    const _appError = handleError(error, 'GlobalErrorBoundary');
 
     if (process.env.NODE_ENV === 'development') {
       console.group('React Error Info');

@@ -69,9 +69,27 @@ export function useChatsRealtime(user: User | null) {
         attachments: (newMessage.attachments as Message['attachments']) || [],
       } as Message;
 
+      // 1. Update chat list (last message preview)
       queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
         upsertChatLastMessage(old, newMessage.chat_id, normalizedMessage),
       );
+
+      // 2. Update specific chat messages cache
+      queryClient.setQueryData(['messages', newMessage.chat_id], (old: any) => {
+        if (!old) return old;
+
+        // Check for duplicates (if we sent the message ourselves and already have an optimistic or real entry)
+        const exists = old.pages.some((page: Message[]) =>
+          page.some((m) => m.id === normalizedMessage.id),
+        );
+        if (exists) return old;
+
+        const newPages = [...old.pages];
+        const lastPageIdx = newPages.length - 1;
+        newPages[lastPageIdx] = [...newPages[lastPageIdx], normalizedMessage];
+
+        return { ...old, pages: newPages };
+      });
     };
 
     const handleUpdate = (payload: RealtimePayload<MessagePayload>) => {
@@ -79,13 +97,14 @@ export function useChatsRealtime(user: User | null) {
         return;
       }
       const updatedMessage = payload.new;
-      if (!updatedMessage?.chat_id) return;
+      if (!updatedMessage?.id || !updatedMessage?.chat_id) return;
 
       const normalizedMessage = {
         ...(updatedMessage as Message),
         attachments: (updatedMessage.attachments as Message['attachments']) || [],
       } as Message;
 
+      // 1. Update chat list
       queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
         updateChatMessageIfMatches(
           old,
@@ -94,6 +113,17 @@ export function useChatsRealtime(user: User | null) {
           (chat) => ({ ...chat, messages: [normalizedMessage] }),
         ),
       );
+
+      // 2. Update specific message in chat messages cache
+      queryClient.setQueryData(['messages', updatedMessage.chat_id], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: Message[]) =>
+            page.map((m) => (m.id === normalizedMessage.id ? normalizedMessage : m)),
+          ),
+        };
+      });
     };
 
     const handleDelete = (payload: RealtimePayload<MessagePayload>) => {
@@ -104,6 +134,7 @@ export function useChatsRealtime(user: User | null) {
       const deletedChatId = payload.old?.chat_id;
       if (!deletedId || !deletedChatId) return;
 
+      // 1. Update chat list
       queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
         updateChatMessageIfMatches(
           old,
@@ -115,6 +146,15 @@ export function useChatsRealtime(user: User | null) {
           }),
         ),
       );
+
+      // 2. Remove from messages cache
+      queryClient.setQueryData(['messages', deletedChatId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: Message[]) => page.filter((m) => m.id !== deletedId)),
+        };
+      });
     };
 
     realtimeApi.subscribeToAllMessages(channel, (payload: RealtimePayload<MessagePayload>) => {

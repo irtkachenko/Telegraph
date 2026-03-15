@@ -23,7 +23,7 @@ const DEFAULT_POLICIES: StoragePolicies = {
   allowedExtensions: storageConfig.buckets.attachments.allowedExtensions,
   rateLimitPerMinute: 10,
   maxTotalSize: 100 * 1024 * 1024, // 100MB загальний ліміт на повідомлення
-  maxFilesPerMessage: 10, // Максимально 10 файлів на повідомлення
+  maxFilesPerMessage: 4, // Змінено на 4 файли на повідомлення
 };
 
 export function useDynamicStorageConfig() {
@@ -105,7 +105,7 @@ export function useStorageLimits() {
     if (files.length > DEFAULT_POLICIES.maxFilesPerMessage) {
       return {
         valid: false,
-        error: `Занадто багато файлів. Максимально: ${DEFAULT_POLICIES.maxFilesPerMessage}`,
+        error: `Забагато файлів. Максимально: ${DEFAULT_POLICIES.maxFilesPerMessage}`,
       };
     }
 

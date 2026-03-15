@@ -1,12 +1,12 @@
 /**
- * Утиліти для обробки та логування помилок
+ * Error utility functions for handling and logging application errors.
  */
 
 import { toast } from 'sonner';
 import type { AppError } from './errors';
 import { createErrorFromStatus, getErrorMessage, isAppError, isOperationalError } from './errors';
 
-// Конфігурація логування
+// Logging configuration
 interface ErrorLogConfig {
   enableConsoleLog: boolean;
   enableToast: boolean;
@@ -20,24 +20,31 @@ const defaultConfig: ErrorLogConfig = {
   enableRemoteLogging: process.env.NODE_ENV === 'production',
 };
 
-// Локальне сховище для помилок (для дебагінгу)
+// Local storage for errors (for debugging history)
 const errorHistory: Array<{
   error: AppError;
   timestamp: Date;
   context?: string;
 }> = [];
 
-// Отримання історії помилок
+/**
+ * Retrieve the history of handled errors.
+ */
 export function getErrorHistory() {
   return [...errorHistory];
 }
 
-// Очищення історії помилок
+/**
+ * Clear the error history.
+ */
 export function clearErrorHistory() {
   errorHistory.length = 0;
 }
 
-// Основний обробник помилок
+/**
+ * Core error handler. Processes unknown errors into AppError,
+ * logs them, and notifies the user via toast if configured.
+ */
 export function handleError(
   error: unknown,
   context?: string,
@@ -45,7 +52,7 @@ export function handleError(
 ): AppError {
   const finalConfig = { ...defaultConfig, ...config };
 
-  // Перетворюємо помилку в AppError
+  // Convert raw error into structured AppError
   let appError: AppError;
 
   if (isAppError(error)) {
@@ -56,36 +63,36 @@ export function handleError(
     appError = createErrorFromStatus(500, String(error), 'UNKNOWN_ERROR');
   }
 
-  // Додаємо контекст до повідомлення
+  // Prepend context to the error message for better traceability
   if (context) {
     appError.message = `[${context}] ${appError.message}`;
   }
 
-  // Логуємо в консоль (dev)
+  // Log to console in development mode
   if (finalConfig.enableConsoleLog) {
     console.group(`🚨 ${appError.name}: ${appError.code}`);
     console.error(appError);
     console.groupEnd();
   }
 
-  // Показуємо toast користувачу
+  // Notify the user via toast
   if (finalConfig.enableToast) {
     showErrorToast(appError);
   }
 
-  // Відправляємо на remote logging (prod)
+  // Send to remote logging in production
   if (finalConfig.enableRemoteLogging && finalConfig.remoteEndpoint) {
     logErrorRemotely(appError, context).catch(console.warn);
   }
 
-  // Зберігаємо в історію
+  // Add to internal history
   errorHistory.push({
     error: appError,
     timestamp: new Date(),
     context,
   });
 
-  // Обмежуємо історію до 50 помилок
+  // Limit history size to 50 entries
   if (errorHistory.length > 50) {
     errorHistory.shift();
   }
@@ -93,7 +100,9 @@ export function handleError(
   return appError;
 }
 
-// Показ toast повідомлення на основі типу помилки
+/**
+ * Display a toast notification based on error type and severity.
+ */
 function showErrorToast(error: AppError) {
   const title = getToastTitle(error);
   const description = getToastDescription(error);
@@ -107,7 +116,9 @@ function showErrorToast(error: AppError) {
   }
 }
 
-// Отримання заголовка для toast
+/**
+ * Get localized title for the error toast (UI)
+ */
 function getToastTitle(error: AppError): string {
   switch (error.constructor.name) {
     case 'AuthError':
@@ -129,18 +140,22 @@ function getToastTitle(error: AppError): string {
   }
 }
 
-// Отримання опису для toast
+/**
+ * Get localized description for the error toast (UI)
+ */
 function getToastDescription(error: AppError): string {
-  // Для операційних помилок показуємо детальне повідомлення
+  // For operational errors, show the detailed message
   if (error.isOperational) {
     return error.message;
   }
 
-  // Для критичних помилок показуємо загальне повідомлення
+  // For critical/unexpected errors, show a generic message
   return 'Сталася неочікувана помилка. Спробуйте ще раз.';
 }
 
-// Відправка помилки на remote logging
+/**
+ * Send error data to remote logging endpoint.
+ */
 async function logErrorRemotely(error: AppError, context?: string) {
   try {
     const response = await fetch('/api/errors', {
@@ -165,7 +180,9 @@ async function logErrorRemotely(error: AppError, context?: string) {
   }
 }
 
-// Обробник для async функцій
+/**
+ * Wrapper for async functions to automatically handle errors.
+ */
 export function withErrorHandling<T extends any[], R>(
   fn: (...args: T) => Promise<R>,
   context?: string,
@@ -175,24 +192,28 @@ export function withErrorHandling<T extends any[], R>(
       return await fn(...args);
     } catch (error) {
       handleError(error, context);
-      throw error; // Прокидаємо помилку далі
+      throw error;
     }
   };
 }
 
-// Обробник для React Query
+/**
+ * Error handler factory for React Query queries and mutations.
+ */
 export function createQueryErrorHandler(context?: string) {
   return (error: unknown) => {
     handleError(error, context);
   };
 }
 
-// Обробник для React Error Boundary
+/**
+ * Error handler for React Error Boundary components.
+ */
 export function createBoundaryErrorHandler(context?: string) {
   return (error: Error, errorInfo: React.ErrorInfo) => {
     const enhancedError = handleError(error, context);
 
-    // Додаємо React Error Info
+    // Provide React Error Info in development
     if (process.env.NODE_ENV === 'development') {
       console.group('React Error Info');
       console.error(errorInfo);
@@ -203,19 +224,23 @@ export function createBoundaryErrorHandler(context?: string) {
   };
 }
 
-// Валідація помилки для retry логіки
+/**
+ * Determine if an error should trigger a retry attempt.
+ */
 export function shouldRetry(error: unknown): boolean {
   if (!isAppError(error)) {
     return false;
   }
 
-  // Retry для мережевих помилок та серверних помилок (5xx)
+  // Retry for network errors and 5xx server errors
   return (
     error.constructor.name === 'NetworkError' || (error.status !== undefined && error.status >= 500)
   );
 }
 
-// Отримання затримки для retry з exponential backoff
+/**
+ * Calculate retry delay with exponential backoff and jitter.
+ */
 export function getRetryDelay(attemptNumber: number, error: unknown): number {
   if (!shouldRetry(error)) {
     return 0;
@@ -224,6 +249,6 @@ export function getRetryDelay(attemptNumber: number, error: unknown): number {
   // Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s)
   const delay = Math.min(1000 * 2 ** (attemptNumber - 1), 30000);
 
-  // Додаємо jitter для уникнення thundering herd
+  // Add jitter to avoid thundering herd problem
   return delay + Math.random() * 1000;
 }

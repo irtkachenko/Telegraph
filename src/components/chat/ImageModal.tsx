@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, ImageOff, X } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
@@ -39,31 +39,37 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
     setDirection(0);
   }
 
-  const handleNext = (e?: React.MouseEvent | KeyboardEvent) => {
-    // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
-    if (e && 'stopPropagation' in e) {
-      e.stopPropagation();
-    }
+  const handleNext = useCallback(
+    (e?: React.MouseEvent | KeyboardEvent) => {
+      // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
+      if (e && 'stopPropagation' in e) {
+        e.stopPropagation();
+      }
 
-    if (currentIndex < images.length - 1) {
-      setDirection(1);
-      setCurrentIndex((prev) => prev + 1);
-      setHasError(false);
-    }
-  };
+      if (currentIndex < images.length - 1) {
+        setDirection(1);
+        setCurrentIndex((prev) => prev + 1);
+        setHasError(false);
+      }
+    },
+    [currentIndex, images.length],
+  );
 
-  const handlePrev = (e?: React.MouseEvent | KeyboardEvent) => {
-    // Аналогічно тут
-    if (e && 'stopPropagation' in e) {
-      e.stopPropagation();
-    }
+  const handlePrev = useCallback(
+    (e?: React.MouseEvent | KeyboardEvent) => {
+      // Аналогічно тут
+      if (e && 'stopPropagation' in e) {
+        e.stopPropagation();
+      }
 
-    if (currentIndex > 0) {
-      setDirection(-1);
-      setCurrentIndex((prev) => prev - 1);
-      setHasError(false);
-    }
-  };
+      if (currentIndex > 0) {
+        setDirection(-1);
+        setCurrentIndex((prev) => prev - 1);
+        setHasError(false);
+      }
+    },
+    [currentIndex],
+  );
 
   // 3. Обробка клавіш та блокування скролу
   useEffect(() => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useChatsRealtime } from '@/hooks/chat';
 import Navbar from './Navbar';
@@ -21,14 +21,16 @@ export default function ChatLayoutWrapper({ children, sidebar, user }: ChatLayou
   const { supabaseUser } = useSupabaseAuth();
   useChatsRealtime(supabaseUser);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [prevPathname, setPrevPathname] = useState<string | null>(null);
   const pathname = usePathname();
+  const prevPathnameRef = useRef(pathname);
 
-  // Синхронізація при зміні шляху
-  if (pathname !== prevPathname) {
-    if (isSidebarOpen) setIsSidebarOpen(false);
-    setPrevPathname(pathname);
-  }
+  // Закриваємо сайдбар при зміні шляху
+  useEffect(() => {
+    if (pathname !== prevPathnameRef.current) {
+      prevPathnameRef.current = pathname;
+      setIsSidebarOpen(false);
+    }
+  }, [pathname]);
 
   const handleClose = useCallback(() => {
     setIsSidebarOpen(false);

@@ -11,7 +11,8 @@ import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
 import { createClient } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, DatabaseError } from '@/shared/lib/errors';
-import { type AppUser, UserUtils } from '@/types/auth';
+import type { AppUser } from '@/types';
+import { UserUtils } from '@/types/auth';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -102,7 +103,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         } else {
           handleAuthStateChange('INITIAL_SESSION', user ? ({ user } as Session) : null);
         }
-      } catch (error) {
+      } catch (_error) {
         handleError(
           new DatabaseError('Error during auth initialization', 'authInit', 'AUTH_INIT_ERROR', 500),
           'AuthProvider',

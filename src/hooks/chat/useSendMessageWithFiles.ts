@@ -37,6 +37,16 @@ export function useSendMessageWithFiles(chatId: string) {
     mutationFn: async ({ content, files, reply_to_id }: SendMessageWithFilesParams) => {
       if (!user) throw new AuthError('Ви не авторизовані', 'SEND_MESSAGE_AUTH_REQUIRED', 401);
 
+      // Перевірка чи є що відправляти
+      if (!content.trim() && files.length === 0) {
+        throw new ValidationError(
+          'Повідомлення не може бути порожнім',
+          'content',
+          'EMPTY_MESSAGE',
+          400,
+        );
+      }
+
       // Валідація файлів
       const validatedFiles: File[] = [];
       const pendingAttachments: PendingAttachment[] = [];
@@ -77,7 +87,9 @@ export function useSendMessageWithFiles(chatId: string) {
       }
 
       // Паралельне завантаження файлів спочатку
-      const uploadOperations = validatedFiles.map((file) => uploadFileOptimized(file, chatId, user.id));
+      const uploadOperations = validatedFiles.map((file) =>
+        uploadFileOptimized(file, chatId, user.id),
+      );
       const uploadResults = await Promise.allSettled(uploadOperations);
 
       // Обробка результатів завантаження файлів
@@ -88,7 +100,12 @@ export function useSendMessageWithFiles(chatId: string) {
         if (result.status === 'fulfilled') {
           // Переконуємось що результат є типом Attachment
           const uploadResult = result.value;
-          if (uploadResult && typeof uploadResult === 'object' && 'id' in uploadResult && 'url' in uploadResult) {
+          if (
+            uploadResult &&
+            typeof uploadResult === 'object' &&
+            'id' in uploadResult &&
+            'url' in uploadResult
+          ) {
             successfulUploads.push(uploadResult as Attachment);
           }
         } else {
@@ -96,10 +113,15 @@ export function useSendMessageWithFiles(chatId: string) {
         }
       });
 
+      // Якщо всі файли не завантажились і немає тексту, не відправляємо повідомлення
+      if (successfulUploads.length === 0 && !content.trim()) {
+        throw new ValidationError('Не вдалося завантажити файли', 'files', 'UPLOAD_FAILED', 500);
+      }
+
       // Відправляємо повідомлення тільки з успішно завантаженими файлами
       const messagePayload = {
         sender_id: user.id,
-        content,
+        content: content.trim(),
         reply_to_id: reply_to_id || undefined,
         attachments: successfulUploads, // Тільки реальні завантажені файли
       };
@@ -112,7 +134,19 @@ export function useSendMessageWithFiles(chatId: string) {
       // Повідомляємо про помилки завантаження файлів
       if (failedUploads.length > 0) {
         const errorMessages = failedUploads
-          .map(({ file, error }) => `${file.name}: ${error.message}`)
+          .map(({ file, error }) => {
+            const errorCode =
+              error && typeof error === 'object' && 'status' in error
+                ? (error.status as number)
+                : 500;
+            const errorType =
+              errorCode === 400
+                ? 'Неправильний формат файлу'
+                : errorCode === 413
+                  ? 'Файл занадто великий'
+                  : 'Помилка завантаження';
+            return `${file.name}: ${errorType} (${errorCode})`;
+          })
           .join(', ');
 
         toast.error(`Помилка завантаження файлів: ${errorMessages}`);
@@ -236,7 +270,8 @@ export function useSendMessageWithFiles(chatId: string) {
       if (failedFiles.length === 0) {
         toast.success('Повідомлення відправлено');
       } else {
-        toast.warning(`Повідомлення відправлено, але ${failedFiles.length} файлів не завантажено`);
+        const failedFileNames = failedFiles.map((f) => f.file.name).join(', ');
+        toast.warning(`Повідомлення відправлено, але файли не завантажено: ${failedFileNames}`);
       }
     },
   });
@@ -270,11 +305,15 @@ async function uploadFileOptimized(
     const attachment = await storageApi.uploadAttachment(fileToUpload as File, chatId, userId);
     return attachment;
   } catch (error) {
+    // Зберігаємо оригінальний код помилки від Supabase
+    const statusCode =
+      error && typeof error === 'object' && 'status' in error ? (error.status as number) : 500;
+
     throw new NetworkError(
       `Помилка завантаження файлу ${file.name}: ${error instanceof Error ? error.message : 'Невідома помилка'}`,
       'file-upload',
       'ATTACHMENT_UPLOAD_ERROR',
-      500,
+      statusCode,
     );
   }
 }

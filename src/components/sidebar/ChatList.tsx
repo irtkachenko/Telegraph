@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/context-menu';
 import { useChats, useDeleteChat } from '@/hooks/chat';
 import { formatRelativeTime } from '@/lib/date-utils';
+import type { FullChat, Message } from '@/types';
 import { PresenceIndicator } from './PresenceIndicator';
 
 function ChatListBase() {
@@ -79,7 +80,7 @@ function ChatListBase() {
   };
 
   // Функція для рендерингу одного чату
-  const renderChat = (index: number, chat: any) => {
+  const renderChat = (_index: number, chat: FullChat) => {
     const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
     const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
     const partnerImage = partner?.image;
@@ -101,7 +102,7 @@ function ChatListBase() {
     const readMessageId = isCurrentUser ? chat.user_last_read_id : chat.recipient_last_read_id;
 
     // Find the read message in the messages array to get its created_at timestamp
-    const readMessage = chat.messages?.find((m: any) => m.id === readMessageId);
+    const readMessage = chat.messages?.find((m: Message) => m.id === readMessageId);
     const readAt = readMessage?.created_at;
 
     const isUnread =

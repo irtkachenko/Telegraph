@@ -4,7 +4,6 @@ import { MessageSquare, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { memo, Suspense, useEffect } from 'react';
 import { ChatList } from './ChatList';
-import { ContactItem } from './ContactItem';
 import { ContactsList } from './ContactsList';
 import { SearchInput } from './SearchInput';
 

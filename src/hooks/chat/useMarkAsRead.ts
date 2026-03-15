@@ -101,7 +101,7 @@ export function useMarkAsRead() {
       return { previousChats };
     },
 
-    onError: (error, variables, context) => {
+    onError: (error, _variables, context) => {
       if (isRateLimitError(error)) {
         handleError(
           new Error(

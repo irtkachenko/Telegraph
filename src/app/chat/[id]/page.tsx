@@ -18,7 +18,7 @@ import {
   useScrollToMessage,
 } from '@/hooks/chat';
 import { usePresence } from '@/hooks/user';
-import { formatRelativeTime, getSafeTimestamp } from '@/lib/date-utils';
+import { formatRelativeTime } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -77,25 +77,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- ОПТИМІЗАЦІЯ: Створюємо Map індексів повідомлень для O(1) пошуку ---
   const messageIndexMap = useMemo(() => {
-    const map = new Map();
-    messages.forEach((m, index) => map.set(m.id, index));
+    const map = new Map<string, number>();
+    for (let i = 0; i < messages.length; i++) {
+      map.set(messages[i].id, i);
+    }
     return map;
   }, [messages]);
-
-  // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ (Оптимізовано: не перераховуємо при кожному повідомленні, якщо учасники не змінилися) ---
-  const uniqueParticipants = useMemo(() => {
-    const participants: User[] = [];
-    if (user) participants.push(user);
-    if (chat?.participants) {
-      chat.participants.forEach((p: User) => {
-        if (!participants.find((ep) => ep.id === p.id)) participants.push(p);
-      });
-    }
-    return participants;
-  }, [user, chat?.participants]);
-
-  // Зберігаємо початкову кількість повідомлень для Virtuoso (тільки для ініціалізації)
-  const initialMessagesCount = useRef(messages.length);
 
   if (isChatLoading || (isMessagesLoading && !messages.length)) {
     return (
@@ -184,7 +171,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             itemContent={(_index, message) => {
               // O(1) пошук індексу повідомлення
               const currentMessageIndex = messageIndexMap.get(message.id);
-              const recipientLastReadIndex = messageIndexMap.get(chat?.recipient_last_read_id);
+              const recipientLastReadId = chat?.recipient_last_read_id;
+              const recipientLastReadIndex = recipientLastReadId
+                ? messageIndexMap.get(recipientLastReadId)
+                : undefined;
               const isRead =
                 currentMessageIndex !== undefined &&
                 recipientLastReadIndex !== undefined &&

@@ -10,11 +10,11 @@ type RateLimitOptions = {
   maxRequests: number;
 };
 
-// Cache для зберігання лічильників запитів
-// Key: identifier, Value: кількість запитів
-const rateLimitCache = new LRUCache<string, number>({
+// Cache для зберігання лічильників запитів з записами {count, windowStart}
+// Key: identifier, Value: { count, windowStart }
+const rateLimitCache = new LRUCache<string, { count: number; windowStart: number }>({
   max: 1000, // Максимальна кількість унікальних користувачів
-  ttl: 60000, // TTL 1 хвилина
+  ttl: 5 * 60 * 1000, // 5 хвилин — покриває всі можливі вікна
 });
 
 /**
@@ -25,19 +25,22 @@ const rateLimitCache = new LRUCache<string, number>({
  */
 export function rateLimit(identifier: string, options: RateLimitOptions): boolean {
   const now = Date.now();
-  const windowStart = now - options.windowMs;
+  const existing = rateLimitCache.get(identifier);
 
-  // Отримуємо поточну кількість запитів
-  const currentRequests = rateLimitCache.get(identifier) || 0;
+  // Якщо записи немає або вікно сплило — скидаємо лічильник
+  if (!existing || now - existing.windowStart >= options.windowMs) {
+    rateLimitCache.set(identifier, { count: 1, windowStart: now });
+    return true;
+  }
 
   // Перевіряємо ліміт
-  if (currentRequests >= options.maxRequests) {
+  if (existing.count >= options.maxRequests) {
     return false; // Rate limit exceeded
   }
 
   // Збільшуємо лічильник
-  rateLimitCache.set(identifier, currentRequests + 1);
-
+  existing.count++;
+  rateLimitCache.set(identifier, existing);
   return true;
 }
 
@@ -45,8 +48,6 @@ export function rateLimit(identifier: string, options: RateLimitOptions): boolea
  * Очищує застарілі записи (викликається періодично)
  */
 export function cleanupRateLimitCache(): void {
-  // LRU cache автоматично очищує застарілі записи через TTL
-  // Але можна викликати для ручного очищення
   rateLimitCache.purgeStale();
 }
 

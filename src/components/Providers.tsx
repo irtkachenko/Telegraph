@@ -21,7 +21,7 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const handleRender: ProfilerOnRenderCallback = (id, phase, actualDuration) => {
+  const handleRender: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
     commitCount.current++;
     const now = Date.now();
 

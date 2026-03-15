@@ -1,8 +1,8 @@
 'use client';
 
-import { FileX, ImageOff, PlayCircle } from 'lucide-react';
+import { FileX, ImageOff, Loader2, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isMediaType, storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
@@ -63,7 +63,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
   const [processedItems, setProcessedItems] = useState<AttachmentWithUrl[]>([]);
-  const { getUrl, isLoading: isStorageLoading } = useStorageUrl();
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const { getUrl } = useStorageUrl();
   const processedCacheRef = useRef<Map<string, string>>(new Map());
   const failedCacheRef = useRef<Set<string>>(new Set());
 
@@ -110,7 +111,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
             // If not a Supabase storage URL, use as-is
             processedCacheRef.current.set(cacheKey, item.url);
             return { ...item, processedUrl: item.url };
-          } catch (error) {
+          } catch (_error) {
             // Avoid spamming errors for missing/legacy paths; fall back to original URL
             handleError(
               new NetworkError(
@@ -130,6 +131,21 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       );
 
       setProcessedItems(processed);
+      
+      // Only set loading for images that are not already cached
+      const newImageUrls = processed
+        .filter(item => item.type === 'image')
+        .map(item => {
+          const url = item.processedUrl || item.url;
+          const cacheKey = `${item.id}:${item.url}`;
+          // Only add to loading if not already cached and not already loading
+          return !processedCacheRef.current.has(cacheKey) && !loadingImages.has(url) ? url : null;
+        })
+        .filter((url): url is string => url !== null);
+      
+      if (newImageUrls.length > 0) {
+        setLoadingImages(prev => new Set([...prev, ...newImageUrls]));
+      }
     };
 
     processUrls();
@@ -139,30 +155,60 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     return <div className="hidden" />;
   }
 
-  const handleImageError = (url: string) => {
+  const handleImageError = useCallback((url: string) => {
     setFailedUrls((prev) => new Set(prev).add(url));
-  };
+    setLoadingImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(url);
+      return newSet;
+    });
+  }, []);
 
-  const activeMedia = processedItems.filter(
-    (item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url),
+  const handleImageLoad = useCallback((url: string) => {
+    setLoadingImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(url);
+      return newSet;
+    });
+  }, []);
+
+  const handleImageLoadStart = useCallback((url: string) => {
+    setLoadingImages((prev) => new Set(prev).add(url));
+  }, []);
+
+  const activeMedia = useMemo(() => 
+    processedItems.filter(
+      (item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url),
+    ), [processedItems, failedUrls]
   );
   const count = processedItems.length;
+  const activeCount = activeMedia.length;
 
-  const handleMediaClick = (index: number) => {
+  const handleMediaClick = useCallback((index: number) => {
     const clickedItem = processedItems[index];
-    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url))
+    
+    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url)) {
       return;
+    }
+    
     const activeIndex = activeMedia.findIndex((m) => m.id === clickedItem.id);
-    if (activeIndex !== -1) setSelectedIndex(activeIndex);
-  };
+    
+    if (activeIndex !== -1) {
+      setSelectedIndex(activeIndex);
+    }
+  }, [processedItems, failedUrls, activeMedia]);
 
-  const modalImages = activeMedia
-    .filter((item) => isMediaType(item.type))
-    .map((item) => ({ ...item, url: item.processedUrl || item.url }));
+  const modalImages = useMemo(() => 
+    activeMedia
+      .filter((item) => item.type === 'image' || item.type === 'video')
+      .map((item) => ({ ...item, url: item.processedUrl || item.url })),
+    [activeMedia]
+  );
 
-  const renderItem = (item: AttachmentWithUrl, index: number, isLarge = false) => {
+  const renderItem = useCallback((item: AttachmentWithUrl, index: number, isLarge = false) => {
     const itemUrl = item.processedUrl || item.url;
     const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
+    const isLoading = loadingImages.has(itemUrl);
 
     return (
       <div
@@ -171,6 +217,11 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
           'relative overflow-hidden group bg-neutral-200 dark:bg-neutral-800',
           isLarge ? 'col-span-2 aspect-video' : 'aspect-square',
         )}
+        style={{
+          aspectRatio: item.metadata?.width && item.metadata?.height 
+            ? `${item.metadata.width}/${item.metadata.height}` 
+            : isLarge ? '16/9' : '1/1'
+        }}
       >
         {isFailed ? (
           <MediaPlaceholder reason={item.is_deleted ? 'deleted' : 'error'} />
@@ -182,7 +233,12 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
           >
             {item.type === 'video' ? (
               <div className="w-full h-full relative bg-black">
-                <video src={itemUrl} className="w-full h-full object-cover text-white">
+                <video 
+                  src={itemUrl} 
+                  className="w-full h-full object-cover text-white"
+                  onLoadedData={() => handleImageLoad(itemUrl)}
+                  onError={() => handleImageError(itemUrl)}
+                >
                   <track kind="captions" />
                 </video>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
@@ -190,35 +246,45 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
                 </div>
               </div>
             ) : (
-              <Image
-                src={itemUrl}
-                alt=""
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                unoptimized
-                onError={() => handleImageError(itemUrl)}
-              />
+              <>
+                {isLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 z-10">
+                    <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
+                  </div>
+                )}
+                <Image
+                  src={itemUrl}
+                  alt=""
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  unoptimized
+                  onLoadStart={() => handleImageLoadStart(itemUrl)}
+                  onLoad={() => handleImageLoad(itemUrl)}
+                  onError={() => handleImageError(itemUrl)}
+                  sizes="(max-width: 768px) 280px, 400px"
+                />
+              </>
             )}
-            {index === 3 && count > 4 && (
+            {index === 3 && activeCount > 4 && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white z-10">
-                <span className="text-xl font-bold">+{count - 4}</span>
+                <span className="text-xl font-bold">+{activeCount - 4}</span>
               </div>
             )}
           </button>
         )}
       </div>
     );
-  };
+  }, [failedUrls, loadingImages, handleMediaClick, handleImageLoad, handleImageError, handleImageLoadStart, activeCount]);
 
   return (
     <>
       <div
         className={cn(
           'grid gap-1 overflow-hidden rounded-2xl w-[400px] max-w-full max-sm:w-[280px]',
-          count === 1 ? 'grid-cols-1' : 'grid-cols-2',
+          activeCount === 1 ? 'grid-cols-1' : 'grid-cols-2',
         )}
       >
-        {count === 1 && (
+        {activeCount === 1 && (
           <div
             className="relative overflow-hidden bg-neutral-200 dark:bg-neutral-800 rounded-2xl"
             style={{
@@ -242,29 +308,41 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
                   <video
                     src={processedItems[0].processedUrl || processedItems[0].url}
                     className="w-full h-full object-contain bg-black"
+                    onLoadedData={() => handleImageLoad(processedItems[0].processedUrl || processedItems[0].url)}
+                    onError={() => handleImageError(processedItems[0].processedUrl || processedItems[0].url)}
                   >
                     <track kind="captions" />
                   </video>
                 ) : (
-                  <Image
-                    src={processedItems[0].processedUrl || processedItems[0].url}
-                    alt=""
-                    fill
-                    className="object-contain bg-neutral-900/10"
-                    unoptimized
-                    onError={() =>
-                      handleImageError(processedItems[0].processedUrl || processedItems[0].url)
-                    }
-                  />
+                  <>
+                    {loadingImages.has(processedItems[0].processedUrl || processedItems[0].url) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 z-10">
+                        <Loader2 className="w-8 h-8 text-neutral-400 animate-spin" />
+                      </div>
+                    )}
+                    <Image
+                      src={processedItems[0].processedUrl || processedItems[0].url}
+                      alt=""
+                      fill
+                      className="object-contain bg-neutral-900/10"
+                      unoptimized
+                      onLoadStart={() => handleImageLoadStart(processedItems[0].processedUrl || processedItems[0].url)}
+                      onLoad={() => handleImageLoad(processedItems[0].processedUrl || processedItems[0].url)}
+                      onError={() =>
+                        handleImageError(processedItems[0].processedUrl || processedItems[0].url)
+                      }
+                      sizes="(max-width: 768px) 280px, 400px"
+                    />
+                  </>
                 )}
               </button>
             )}
           </div>
         )}
 
-        {count === 2 && processedItems.map((item, i) => renderItem(item, i))}
+        {activeCount === 2 && processedItems.map((item, i) => renderItem(item, i))}
 
-        {count === 3 && (
+        {activeCount === 3 && (
           <>
             {renderItem(processedItems[0], 0, true)}
             {renderItem(processedItems[1], 1)}
@@ -272,7 +350,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
           </>
         )}
 
-        {count >= 4 && processedItems.slice(0, 4).map((item, i) => renderItem(item, i))}
+        {activeCount >= 4 && processedItems.slice(0, 4).map((item, i) => renderItem(item, i))}
       </div>
 
       <Suspense fallback={<div className="hidden" />}>

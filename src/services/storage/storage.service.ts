@@ -1,5 +1,5 @@
-import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
-import type { StorageConfig as DynamicStorageConfig } from '@/hooks/useStorageConfig';
+import type { StorageConfigResponse } from '@/config/storage.config';
+import { isPrivateBucket, storageConfig } from '@/config/storage.config';
 import { supabase } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
@@ -153,7 +153,7 @@ export const storageApi = {
     const publicUrl = await storageApi.getPublicUrl('attachments', filePath);
 
     const attachment: Attachment = {
-      id: crypto.randomUUID(),
+      id: `attachment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       url: publicUrl,
       type: file.type.startsWith('image/')
         ? 'image'
@@ -173,7 +173,7 @@ export const storageApi = {
   /**
    * Отримання динамічної конфігурації storage
    */
-  getStorageConfig: async (): Promise<DynamicStorageConfig> => {
+  getStorageConfig: async (): Promise<StorageConfigResponse> => {
     const response = await fetch('/api/storage/config');
     if (!response.ok) {
       throw new NetworkError(

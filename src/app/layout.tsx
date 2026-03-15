@@ -7,6 +7,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import AuthProvider from '@/components/auth/AuthProvider';
 import ChatLayoutWrapper from '@/components/layout/ChatLayoutWrapper';
 import GlobalCleanup from '@/components/layout/GlobalCleanup';
+import PerformanceMonitor from '@/components/PerformanceMonitor';
 import Providers from '@/components/Providers';
 import Sidebar from '@/components/sidebar/Sidebar';
 import { createClient } from '@/lib/supabase/server';
@@ -43,6 +44,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
       >
         <Providers>
+          <PerformanceMonitor />
           <AuthProvider>
             <GlobalCleanup>
               <ChatLayoutWrapper

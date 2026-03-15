@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import Linkify from 'linkify-react';
 import { Check, CheckCheck, Clock, Download, Edit, FileIcon, Reply, Trash2 } from 'lucide-react';
-import React, { memo } from 'react';
+import { memo } from 'react';
 
 import {
   ContextMenu,
@@ -13,7 +13,7 @@ import {
 import { formatMessageDate } from '@/lib/date-utils';
 import { isValidUrlForLinkify } from '@/lib/sanitize';
 import { cn } from '@/lib/utils';
-import type { Message } from '@/types';
+import type { Attachment, Message } from '@/types';
 import MessageMediaGrid from './MessageMediaGrid';
 
 interface MessageBubbleProps {
@@ -50,8 +50,9 @@ const MessageBubble = memo(
     const isEdited = !!message.updated_at;
 
     const mediaAttachments =
-      message.attachments?.filter((a: any) => a.type === 'image' || a.type === 'video') || [];
-    const fileAttachments = message.attachments?.filter((a: any) => a.type === 'file') || [];
+      message.attachments?.filter((a: Attachment) => a.type === 'image' || a.type === 'video') ||
+      [];
+    const fileAttachments = message.attachments?.filter((a: Attachment) => a.type === 'file') || [];
 
     // Handle hydration mismatch by using suppressHydrationWarning for date formatting
     const formattedDate = formatMessageDate(message.created_at);
@@ -155,7 +156,7 @@ const MessageBubble = memo(
 
                 {fileAttachments.length > 0 && (
                   <div className="mt-2 space-y-1.5 w-full min-w-0">
-                    {fileAttachments.map((file: any) => (
+                    {fileAttachments.map((file: Attachment) => (
                       <a
                         key={file.id}
                         href={file.url}
