@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import type { OptimisticAttachment } from '@/hooks/useOptimisticAttachment';
+import type { OptimisticAttachment } from '@/types';
 import type { Message } from '@/types';
 import AttachmentPreview from './AttachmentPreview';
 

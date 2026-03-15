@@ -27,6 +27,8 @@ export interface StorageConfig {
   bucketNames: {
     attachments: string;
   };
+  // Allowed file extensions for uploads (without dot)
+  uploadAllowedExtensions: string[];
   // Static asset extensions for middleware exclusion
   staticAssetExtensions: string[];
   // Default fallback values for error cases
@@ -42,6 +44,29 @@ export const storageConfig: StorageConfig = {
   bucketNames: {
     attachments: 'attachments',
   },
+  uploadAllowedExtensions: [
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'svg',
+    'mp4',
+    'webm',
+    'mov',
+    'avi',
+    'mkv',
+    'pdf',
+    'doc',
+    'docx',
+    'txt',
+    'rtf',
+    'zip',
+    'rar',
+    '7z',
+    'tar',
+    'gz',
+  ],
   staticAssetExtensions: [
     'svg',
     'png',
@@ -73,6 +98,10 @@ import { ConfigError } from '@/shared/lib/errors';
 
 export function getBucketName(bucketKey: keyof StorageConfig['bucketNames']): string {
   return storageConfig.bucketNames[bucketKey];
+}
+
+export function getUploadAllowedExtensions(): string[] {
+  return storageConfig.uploadAllowedExtensions;
 }
 
 export function isStaticAsset(pathname: string): boolean {

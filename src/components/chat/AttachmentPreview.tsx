@@ -2,7 +2,7 @@
 
 import { FileIcon, Loader2, X } from 'lucide-react';
 import Image from 'next/image';
-import type { OptimisticAttachment } from '@/hooks/useOptimisticAttachment';
+import type { OptimisticAttachment } from '@/types';
 
 interface AttachmentPreviewProps {
   attachment: OptimisticAttachment;

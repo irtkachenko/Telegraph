@@ -1,15 +1,15 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { ConfigError } from '@/shared/lib/errors';
+import { requireEnv } from '@/lib/env';
 
 /**
  * Створює інстанс клієнта Supabase для використання на сервері.
  * Використовує React cache для забезпечення "сінглтона" в межах одного запиту.
  */
 export const createClient = cache(async () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   const cookieStore = await cookies();
 

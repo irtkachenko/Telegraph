@@ -95,7 +95,7 @@ export const messagesApi = {
           );
         }
       } catch {
-        // Ignore chat update errors — do not block sending
+        // Ignore chat update errors; do not block sending.
       }
 
       return data as Message;
@@ -139,20 +139,4 @@ export const messagesApi = {
     { ...RATE_LIMITS.MESSAGE_SEND, name: 'editMessage' },
   ),
 
-  /**
-   * Mark a message as read utilizing the SQL RPC function
-   */
-  markAsRead: withRateLimitFn(
-    async (chatId: string, messageId: string, userId: string) => {
-      const { error } = await supabase.rpc('mark_chat_as_read', {
-        p_chat_id: chatId,
-        p_message_id: messageId,
-        p_user_id: userId,
-      });
-
-      if (error) throw error;
-      return { success: true };
-    },
-    { ...RATE_LIMITS.MESSAGE_READ, name: 'markAsRead' },
-  ),
 };

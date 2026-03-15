@@ -44,6 +44,17 @@ export interface Attachment {
   };
 }
 
+/**
+ * UI attachment shape for previews before upload completes.
+ */
+export interface OptimisticAttachment extends Attachment {
+  file?: File;
+  previewUrl: string;
+  uploading?: boolean;
+  error?: string;
+  progress?: number;
+}
+
 // Export AppUser as User for backward compatibility
 export type User = AppUser;
 export type Chat = Database['public']['Tables']['chats']['Row'];

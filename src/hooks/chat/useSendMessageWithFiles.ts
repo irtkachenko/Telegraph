@@ -25,6 +25,21 @@ interface SendMessageWithFilesParams {
   reply_to_id?: string;
 }
 
+type StorageRef = { bucket: string; path: string };
+
+function extractStorageRef(rawUrl: string): StorageRef | null {
+  if (!rawUrl) return null;
+  const url = rawUrl.split('?')[0] || rawUrl;
+  const supabaseMatch = url.match(
+    /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/,
+  );
+  if (supabaseMatch) {
+    const [, bucket, path] = supabaseMatch;
+    return { bucket, path: decodeURIComponent(path) };
+  }
+  return null;
+}
+
 /**
  * Хук для паралельної відправки повідомлень з файлами
  */
@@ -126,7 +141,27 @@ export function useSendMessageWithFiles(chatId: string) {
         attachments: successfulUploads, // Тільки реальні завантажені файли
       };
 
-      const savedMessage = await messagesApi.sendMessage(chatId, messagePayload);
+      let savedMessage: Message;
+      try {
+        savedMessage = await messagesApi.sendMessage(chatId, messagePayload);
+      } catch (error) {
+        // Best-effort cleanup for already uploaded files
+        const refs = successfulUploads
+          .map((a) => extractStorageRef(a.url))
+          .filter((r): r is StorageRef => !!r);
+        const bucketToPaths = new Map<string, string[]>();
+        refs.forEach((r) => {
+          const list = bucketToPaths.get(r.bucket) || [];
+          list.push(r.path);
+          bucketToPaths.set(r.bucket, list);
+        });
+        await Promise.allSettled(
+          Array.from(bucketToPaths.entries()).map(([bucket, paths]) =>
+            storageApi.deleteFiles(bucket, paths),
+          ),
+        );
+        throw error;
+      }
 
       // Очищення preview URLs
       pendingAttachments.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));

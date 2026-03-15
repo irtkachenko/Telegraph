@@ -99,3 +99,13 @@ pnpm push-migrations
 1. `SUPABASE_PROJECT_REF` (env)
 2. `supabase/.temp/project-ref` (РїС–СЃР»СЏ `supabase link`)
 3. `.env.local` (поля `NEXT_PUBLIC_SUPABASE_URL`)
+
+### SUPABASE_SERVICE_ROLE_KEY (server-only)
+
+Для коректного читання конфігу Storage bucket на сервері додайте змінну:
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+```
+
+Важливо: цей ключ **не можна** використовувати на клієнті й **не можна** робити `NEXT_PUBLIC_`.

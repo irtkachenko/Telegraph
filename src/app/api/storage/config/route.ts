@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
-import { storageConfig } from '@/config/storage.config';
+import { getUploadAllowedExtensions, storageConfig } from '@/config/storage.config';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = serviceRoleKey
+      ? createSupabaseClient(supabaseUrl, serviceRoleKey)
+      : await createClient();
     const { data: bucket, error } = await supabase.storage.getBucket(
       storageConfig.bucketNames.attachments,
     );
@@ -21,7 +26,7 @@ export async function GET() {
         ],
         limits: {
           maxFileSize: String(storageConfig.defaults.maxFileSize),
-          allowedTypes: storageConfig.staticAssetExtensions.map((ext: string) => `.${ext}`),
+          allowedTypes: getUploadAllowedExtensions().map((ext: string) => `.${ext}`),
           signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
         },
       });
@@ -42,7 +47,7 @@ export async function GET() {
         allowedTypes:
           Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
             ? bucket.allowed_mime_types
-            : storageConfig.staticAssetExtensions.map((ext: string) => `.${ext}`),
+            : getUploadAllowedExtensions().map((ext: string) => `.${ext}`),
         signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
       },
     };

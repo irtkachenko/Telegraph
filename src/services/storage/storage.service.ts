@@ -139,6 +139,15 @@ export const storageApi = {
   },
 
   /**
+   * Remove files from storage (best-effort cleanup)
+   */
+  deleteFiles: async (bucket: string, paths: string[]) => {
+    if (paths.length === 0) return;
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+    if (error) throw error;
+  },
+
+  /**
    * Завантаження attachment з оптимістичним оновленням
    */
   uploadAttachment: async (file: File, chatId: string, userId: string) => {
