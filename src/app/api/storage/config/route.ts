@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 
 interface BucketConfig {
   name: string;
@@ -26,11 +26,13 @@ export async function GET() {
 
     if (error || !bucket) {
       const fallbackConfig: StorageConfigResponse = {
-        buckets: [{
-          name: 'attachments',
-          public: true,
-          createdAt: new Date().toISOString(),
-        }],
+        buckets: [
+          {
+            name: 'attachments',
+            public: true,
+            createdAt: new Date().toISOString(),
+          },
+        ],
         limits: {
           maxFileSize: '52428800',
           allowedTypes: ['image/*', 'video/*', 'application/pdf'],
@@ -42,16 +44,19 @@ export async function GET() {
     }
 
     const config: StorageConfigResponse = {
-      buckets: [{
-        name: bucket.name,
-        public: bucket.public,
-        createdAt: bucket.created_at,
-      }],
+      buckets: [
+        {
+          name: bucket.name,
+          public: bucket.public,
+          createdAt: bucket.created_at,
+        },
+      ],
       limits: {
         maxFileSize: String(bucket.file_size_limit ?? '52428800'),
-        allowedTypes: Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
-          ? bucket.allowed_mime_types
-          : ['image/*', 'video/*', 'application/pdf'],
+        allowedTypes:
+          Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
+            ? bucket.allowed_mime_types
+            : ['image/*', 'video/*', 'application/pdf'],
         signedUrlExpiry: 3600,
       },
     };
@@ -59,9 +64,6 @@ export async function GET() {
     return NextResponse.json(config);
   } catch (error) {
     console.error('Storage config error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get storage config' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to get storage config' }, { status: 500 });
   }
 }

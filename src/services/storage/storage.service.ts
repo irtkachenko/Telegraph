@@ -1,9 +1,9 @@
 import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
+import type { StorageConfig as DynamicStorageConfig } from '@/hooks/useStorageConfig';
 import { supabase } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
-import type { StorageConfig as DynamicStorageConfig } from '@/hooks/useStorageConfig';
 
 interface SignedUrlOptions {
   expiresIn?: number;

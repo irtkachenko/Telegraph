@@ -85,37 +85,48 @@ export const searchSchema = z.object({
 
 // File upload validation schema - динамічні налаштування
 export const createFileUploadSchema = (maxSize: number, allowedTypes: string[]) =>
-  z.object({
-    files: z.array(z.instanceof(File)).max(5, 'Cannot upload more than 5 files'),
-    maxSize: z.number().max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
-    allowedTypes: z.array(z.string()).default(allowedTypes),
-  })
-  .refine(
-    (data) => {
-      return data.files.every(
-        (file) => data.allowedTypes.some(type => file.type.match(type.replace('*', '.*'))) && file.size <= data.maxSize,
-      );
-    },
-    {
-      message: `All files must be valid types and under ${Math.round(maxSize / 1024 / 1024)}MB`,
-    },
-  );
+  z
+    .object({
+      files: z.array(z.instanceof(File)).max(5, 'Cannot upload more than 5 files'),
+      maxSize: z
+        .number()
+        .max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
+      allowedTypes: z.array(z.string()).default(allowedTypes),
+    })
+    .refine(
+      (data) => {
+        return data.files.every(
+          (file) =>
+            data.allowedTypes.some((type) => file.type.match(type.replace('*', '.*'))) &&
+            file.size <= data.maxSize,
+        );
+      },
+      {
+        message: `All files must be valid types and under ${Math.round(maxSize / 1024 / 1024)}MB`,
+      },
+    );
 
 // Individual file validation - динамічні налаштування
 export const createSingleFileSchema = (maxSize: number, allowedTypes: string[]) =>
-  z.object({
-    file: z.instanceof(File),
-    maxSize: z.number().max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
-    allowedTypes: z.array(z.string()).default(allowedTypes),
-  })
-  .refine(
-    (data) => {
-      return data.allowedTypes.some(type => data.file.type.match(type.replace('*', '.*'))) && data.file.size <= data.maxSize;
-    },
-    {
-      message: `File must be a valid type and under ${Math.round(maxSize / 1024 / 1024)}MB`,
-    },
-  );
+  z
+    .object({
+      file: z.instanceof(File),
+      maxSize: z
+        .number()
+        .max(maxSize, `File size cannot exceed ${Math.round(maxSize / 1024 / 1024)}MB`),
+      allowedTypes: z.array(z.string()).default(allowedTypes),
+    })
+    .refine(
+      (data) => {
+        return (
+          data.allowedTypes.some((type) => data.file.type.match(type.replace('*', '.*'))) &&
+          data.file.size <= data.maxSize
+        );
+      },
+      {
+        message: `File must be a valid type and under ${Math.round(maxSize / 1024 / 1024)}MB`,
+      },
+    );
 
 // Type exports for use in components and actions
 export type MessageInput = z.infer<typeof messageSchema>;

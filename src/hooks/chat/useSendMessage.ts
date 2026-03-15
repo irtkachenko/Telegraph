@@ -2,8 +2,8 @@
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { messagesApi } from '@/services';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { messagesApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError } from '@/shared/lib/errors';
 import type { Attachment, Message } from '@/types';

@@ -1,14 +1,14 @@
 'use client';
 
+import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { chatsApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
-import type { InfiniteData } from '@tanstack/react-query';
-import { mapChatsInfinite } from './chats-cache';
 import type { FullChat } from '@/types';
+import { mapChatsInfinite } from './chats-cache';
 
 /**
  * Хук для видалення чату.

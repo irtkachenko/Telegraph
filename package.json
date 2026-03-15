@@ -11,7 +11,8 @@
     "format": "biome format --write ./src",
     "check": "biome check --write ./src && pnpm lint",
     "setup": "pnpm install --frozen-lockfile",
-    "xml": "npx repomix"
+    "xml": "npx repomix",
+    "generate-types": "node scripts/update-types.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -27,14 +28,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "drizzle-orm": "^0.45.1",
     "framer-motion": "^12.36.0",
     "linkify-react": "^4.3.2",
     "linkifyjs": "^4.3.2",
     "lru-cache": "^11.2.7",
     "lucide-react": "^0.577.0",
     "next": "^16.1.6",
-    "postgres": "^3.4.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-virtuoso": "^4.18.3",

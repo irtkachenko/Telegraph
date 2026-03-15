@@ -3,9 +3,9 @@
 import { Loader2, MessageSquarePlus, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { memo, useTransition } from 'react';
-import { getOrCreateChatAction } from '@/actions/chat-actions';
+import { memo } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { useGetOrCreateChat } from '@/hooks/chat/useGetOrCreateChat';
 import { formatRelativeTime } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/shared/lib/error-handler';
@@ -22,39 +22,20 @@ interface ContactItemProps {
 }
 
 function ContactItemBase({ user, disabled, onActionStart, onActionEnd }: ContactItemProps) {
-  const [isPending, startTransition] = useTransition();
   const { user: currentUser } = useSupabaseAuth();
-  const router = useRouter();
+  const getOrCreateChat = useGetOrCreateChat();
 
   const handleStartChat = () => {
-    if (disabled || isPending || !currentUser?.id) return;
+    if (disabled || !currentUser?.id) return;
 
     onActionStart?.(user.id);
-    startTransition(async () => {
-      try {
-        const result = await getOrCreateChatAction(user.id);
-
-        // Handle null result (unauthorized or error)
-        if (!result) {
-          // Redirect to login or show auth modal
-          router.push('/login');
-          return;
-        }
-
-        // If successful, the redirect will happen in the server action
-      } catch (error) {
-        handleError(
-          new NetworkError(
-            'Unexpected error during chat creation',
-            'chatCreation',
-            'CHAT_CREATION_ERROR',
-            500,
-          ),
-          'ContactItem',
-        );
-      } finally {
+    getOrCreateChat.mutate(user.id, {
+      onSuccess: () => {
         onActionEnd?.();
-      }
+      },
+      onError: () => {
+        onActionEnd?.();
+      },
     });
   };
 
@@ -62,7 +43,7 @@ function ContactItemBase({ user, disabled, onActionStart, onActionEnd }: Contact
     <div
       className={cn(
         'flex items-center gap-3 px-3 py-3 rounded-xl transition-all border border-transparent group',
-        isPending ? 'bg-white/10' : 'hover:bg-white/5 hover:border-white/5',
+        getOrCreateChat.isPending ? 'bg-white/10' : 'hover:bg-white/5 hover:border-white/5',
       )}
     >
       <div className="relative w-10 h-10 rounded-full shrink-0">
@@ -102,18 +83,20 @@ function ContactItemBase({ user, disabled, onActionStart, onActionEnd }: Contact
 
       <button
         type="button"
-        disabled={disabled || isPending}
+        disabled={disabled || getOrCreateChat.isPending}
         onClick={handleStartChat}
         className={cn(
           'p-2 rounded-lg transition-all shrink-0',
-          isPending
+          getOrCreateChat.isPending
             ? 'bg-white text-black'
             : 'bg-white/5 text-gray-400 hover:bg-white hover:text-black lg:opacity-0 lg:group-hover:opacity-100',
-          disabled && !isPending && 'opacity-50 cursor-not-allowed pointer-events-none',
+          disabled &&
+            !getOrCreateChat.isPending &&
+            'opacity-50 cursor-not-allowed pointer-events-none',
         )}
         title="Send Message"
       >
-        {isPending ? (
+        {getOrCreateChat.isPending ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
           <MessageSquarePlus className="w-4 h-4" />

@@ -1,4 +1,5 @@
 export * from './useChatDetails';
+export * from './useChatEvents';
 export * from './useChats';
 export * from './useChatsRealtime';
 export * from './useDeleteChat';
@@ -8,4 +9,3 @@ export * from './useMarkAsRead';
 export * from './useMessages';
 export * from './useScrollToMessage';
 export * from './useSendMessage';
-export * from './useChatEvents';
