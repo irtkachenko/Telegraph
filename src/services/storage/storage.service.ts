@@ -153,7 +153,7 @@ export const storageApi = {
     const publicUrl = await storageApi.getPublicUrl('attachments', filePath);
 
     const attachment: Attachment = {
-      id: `temp-${Date.now()}`,
+      id: crypto.randomUUID(),
       url: publicUrl,
       type: file.type.startsWith('image/')
         ? 'image'

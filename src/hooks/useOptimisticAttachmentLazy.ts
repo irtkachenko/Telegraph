@@ -24,7 +24,7 @@ export interface LazyAttachment {
 export function useOptimisticAttachmentLazy() {
   const [attachments, setAttachments] = useState<LazyAttachment[]>([]);
   const { user } = useSupabaseAuth();
-  const { validateFile } = useStorageLimits();
+  const { validateFile, validateFiles } = useStorageLimits();
 
   // Очищення URL-прев'ю при розмонтуванні компонента
   useEffect(() => {
@@ -85,6 +85,21 @@ export function useOptimisticAttachmentLazy() {
   };
 
   const addFiles = async (files: File[]): Promise<LazyAttachment[]> => {
+    // Валідація групи файлів
+    const groupValidation = validateFiles(files);
+    if (!groupValidation.valid) {
+      handleError(
+        new ValidationError(
+          groupValidation.error || 'Помилка валідації файлів',
+          'files',
+          'FILES_VALIDATION_ERROR',
+          400,
+        ),
+        'OptimisticAttachmentLazy',
+      );
+      return [];
+    }
+
     const results = await Promise.allSettled(files.map((file) => addFile(file)));
 
     return results

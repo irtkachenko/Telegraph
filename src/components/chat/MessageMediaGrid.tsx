@@ -86,6 +86,12 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
             return { ...item, processedUrl: item.url };
           }
 
+          // Якщо це blob URL (оптимістичне повідомлення), використовуємо як є
+          if (item.url.startsWith('blob:')) {
+            processedCacheRef.current.set(cacheKey, item.url);
+            return { ...item, processedUrl: item.url };
+          }
+
           // Skip if already processed or if URL is already a signed URL
           if (item.url.includes('?token=')) {
             return { ...item, processedUrl: item.url };

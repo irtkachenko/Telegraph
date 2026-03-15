@@ -136,7 +136,7 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
               {!hasError && currentImage?.url && (
                 <a
                   href={currentImage.url}
-                  download={currentImage.metadata?.name}
+                  download={currentImage.metadata?.name || 'image'}
                   onClick={(e) => e.stopPropagation()}
                   className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-white transition-all"
                 >

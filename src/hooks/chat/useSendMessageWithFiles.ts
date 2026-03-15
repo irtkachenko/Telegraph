@@ -76,44 +76,15 @@ export function useSendMessageWithFiles(chatId: string) {
         });
       }
 
-      // Підготовка payload для повідомлення
-      const messagePayload = {
-        sender_id: user.id,
-        content,
-        reply_to_id: reply_to_id || undefined,
-        // Тимчасово додаємо pending attachments для оптимістичного оновлення
-        attachments: pendingAttachments.map(({ id, type, metadata, previewUrl }) => ({
-          id,
-          type,
-          url: previewUrl,
-          metadata,
-          uploading: true,
-        })),
-      };
-
-      // Паралельна відправка повідомлення та завантаження файлів
-      const operations = [
-        messagesApi.sendMessage(chatId, messagePayload),
-        ...validatedFiles.map((file) => uploadFileOptimized(file, chatId, user.id)),
-      ];
-
-      const results = await Promise.allSettled(operations);
-
-      // Обробка результатів
-      const messageResult = results[0];
-      const fileResults = results.slice(1);
-
-      if (messageResult.status === 'rejected') {
-        throw messageResult.reason;
-      }
-
-      const savedMessage = messageResult.value as Message;
+      // Паралельне завантаження файлів спочатку
+      const uploadOperations = validatedFiles.map((file) => uploadFileOptimized(file, chatId, user.id));
+      const uploadResults = await Promise.allSettled(uploadOperations);
 
       // Обробка результатів завантаження файлів
       const successfulUploads: Attachment[] = [];
       const failedUploads: { file: File; error: Error }[] = [];
 
-      fileResults.forEach((result, index) => {
+      uploadResults.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           // Переконуємось що результат є типом Attachment
           const uploadResult = result.value;
@@ -124,6 +95,16 @@ export function useSendMessageWithFiles(chatId: string) {
           failedUploads.push({ file: validatedFiles[index], error: result.reason });
         }
       });
+
+      // Відправляємо повідомлення тільки з успішно завантаженими файлами
+      const messagePayload = {
+        sender_id: user.id,
+        content,
+        reply_to_id: reply_to_id || undefined,
+        attachments: successfulUploads, // Тільки реальні завантажені файли
+      };
+
+      const savedMessage = await messagesApi.sendMessage(chatId, messagePayload);
 
       // Очищення preview URLs
       pendingAttachments.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
@@ -139,10 +120,11 @@ export function useSendMessageWithFiles(chatId: string) {
 
       // Оновлюємо повідомлення з успішно завантаженими файлами
       if (successfulUploads.length > 0) {
-        // Тут можна додати логіку для оновлення повідомлення з attachment'ами
-        // або повернути оновлене повідомлення
+        // Оновлюємо повідомлення в базі даних з реальними attachments
+        // Це може бути зроблено через окремий API виклик або повернення оновленого повідомлення
       }
 
+      // Повертаємо повідомлення з реальними attachments
       return {
         message: savedMessage,
         uploadedFiles: successfulUploads,
@@ -234,20 +216,8 @@ export function useSendMessageWithFiles(chatId: string) {
             page.map((msg) => {
               // Замінюємо оптимістичне повідомлення на реальне
               if (msg.id.toString().startsWith('temp-') && msg.content === message.content) {
-                // Оновлюємо attachments з завантаженими файлами
-                const updatedAttachments = [
-                  ...uploadedFiles,
-                  // Додаємо невдалі attachments з помилками
-                  ...(context?.optimisticAttachments?.filter(
-                    (optAttachment: Attachment) =>
-                      !uploadedFiles.some((uploaded) => uploaded.id === optAttachment.id),
-                  ) || []),
-                ];
-
-                return {
-                  ...message,
-                  attachments: updatedAttachments,
-                };
+                // Використовуємо тільки реальні attachments з повідомлення
+                return message;
               }
               return msg;
             }),
