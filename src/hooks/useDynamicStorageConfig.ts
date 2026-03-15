@@ -13,6 +13,8 @@ interface StoragePolicies {
   maxFileSize: number;
   allowedExtensions: string[];
   rateLimitPerMinute: number;
+  maxTotalSize: number; // Загальний ліміт для групи файлів
+  maxFilesPerMessage: number; // Максимальна кількість файлів на повідомлення
 }
 
 // Default fallback configuration
@@ -20,6 +22,8 @@ const DEFAULT_POLICIES: StoragePolicies = {
   maxFileSize: 50 * 1024 * 1024, // 50MB
   allowedExtensions: storageConfig.buckets.attachments.allowedExtensions,
   rateLimitPerMinute: 10,
+  maxTotalSize: 100 * 1024 * 1024, // 100MB загальний ліміт на повідомлення
+  maxFilesPerMessage: 10, // Максимально 10 файлів на повідомлення
 };
 
 export function useDynamicStorageConfig() {
@@ -96,6 +100,36 @@ export function useStorageLimits() {
     return { valid: true };
   };
 
+  const validateFiles = (files: File[]): { valid: boolean; error?: string } => {
+    // Перевірка кількості файлів
+    if (files.length > DEFAULT_POLICIES.maxFilesPerMessage) {
+      return {
+        valid: false,
+        error: `Занадто багато файлів. Максимально: ${DEFAULT_POLICIES.maxFilesPerMessage}`,
+      };
+    }
+
+    // Перевірка загального розміру
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > DEFAULT_POLICIES.maxTotalSize) {
+      const maxTotalMB = Math.round(DEFAULT_POLICIES.maxTotalSize / 1024 / 1024);
+      return {
+        valid: false,
+        error: `Загальний розмір файлів занадто великий. Максимально: ${maxTotalMB}MB`,
+      };
+    }
+
+    // Перевірка кожного файлу окремо
+    for (const file of files) {
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        return validation;
+      }
+    }
+
+    return { valid: true };
+  };
+
   return {
     config,
     isLoading,
@@ -103,6 +137,7 @@ export function useStorageLimits() {
     isAllowedExtension,
     getRateLimit,
     validateFile,
+    validateFiles,
   };
 }
 
