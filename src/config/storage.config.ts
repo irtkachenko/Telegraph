@@ -61,7 +61,7 @@ export const storageConfig: StorageConfig = {
     maxFileSize: 50 * 1024 * 1024, // 50MB fallback
     signedUrlExpiry: 3600, // 1 hour fallback
     urlExpiryBuffer: 300, // 5 minutes buffer before URL expires
-    urlCheckInterval: 120, // 2 minutes interval for checking expired URLs
+    urlCheckInterval: 600, // 10 minutes interval for checking expired URLs
   },
 };
 

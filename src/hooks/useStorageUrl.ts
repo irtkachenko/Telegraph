@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { type StorageConfig, storageConfig } from '@/config/storage.config';
 import { storageApi } from '@/services';
 import { AuthError, NetworkError } from '@/shared/lib/errors';
@@ -22,8 +22,8 @@ interface UseStorageUrlReturn {
  * Private buckets will use signed URLs, public buckets will use public URLs
  */
 export function useStorageUrl(): UseStorageUrlReturn {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const isLoadingRef = useRef(false);
+  const errorRef = useRef<Error | null>(null);
 
   const getPublicUrl = useCallback(
     async (bucket: string, path: string, options?: SignedUrlOptions): Promise<string> => {
@@ -41,14 +41,14 @@ export function useStorageUrl(): UseStorageUrlReturn {
 
   const getUrl = useCallback(
     async (bucket: string, path: string, options?: SignedUrlOptions): Promise<string> => {
-      setIsLoading(true);
-      setError(null);
+      isLoadingRef.current = true;
+      errorRef.current = null;
 
       try {
         return await storageApi.getUrl(bucket, path, options);
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
+        errorRef.current = error;
         throw new NetworkError(
           `Failed to get storage URL for ${bucket}/${path}`,
           `${bucket}/${path}`,
@@ -56,7 +56,7 @@ export function useStorageUrl(): UseStorageUrlReturn {
           500,
         );
       } finally {
-        setIsLoading(false);
+        isLoadingRef.current = false;
       }
     },
     [],
@@ -66,8 +66,8 @@ export function useStorageUrl(): UseStorageUrlReturn {
     getPublicUrl,
     getSignedUrl,
     getUrl,
-    isLoading,
-    error,
+    isLoading: isLoadingRef.current,
+    error: errorRef.current,
   };
 }
 
