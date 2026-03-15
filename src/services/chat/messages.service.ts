@@ -75,6 +75,29 @@ export const messagesApi = {
         handleError(networkError, 'MessagesApi.sendMessage');
         throw networkError;
       }
+
+      // Best-effort: bump chat updated_at for stable server-side ordering
+      try {
+        const { error: chatUpdateError } = await supabase
+          .from('chats')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', chatId);
+        if (chatUpdateError) {
+          handleError(
+            new NetworkError(
+              chatUpdateError.message,
+              'chats',
+              'CHAT_UPDATE_ERROR',
+              chatUpdateError.status || 500,
+            ),
+            'MessagesApi.sendMessage',
+            { enableToast: false },
+          );
+        }
+      } catch {
+        // Ignore chat update errors — do not block sending
+      }
+
       return data as Message;
     },
     { ...RATE_LIMITS.MESSAGE_SEND, name: 'sendMessage' },

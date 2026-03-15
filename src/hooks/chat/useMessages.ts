@@ -1,24 +1,23 @@
 'use client';
 
-import { type InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
-import { VirtuosoHandle } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { messagesApi } from '@/services';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
 import { useViewportDetection } from '@/hooks/ui/useViewportDetection';
-import { useScrollPosition } from '@/hooks/ui/useScrollPosition';
 import { useMessageViewTimer } from '@/hooks/ui/useMessageViewTimer';
 import { useChatState } from '@/hooks/ui/useChatState';
 
 /**
  * Hook for fetching and managing chat messages with infinite scroll and auto-read logic.
  */
-export function useMessages(chatId: string, virtuosoRef: React.RefObject<VirtuosoHandle | null>) {
+export function useMessages(chatId: string, isAtBottom: boolean) {
   const { user } = useSupabaseAuth();
   const { mutate: markAsRead } = useMarkAsRead();
-  const queryClient = useQueryClient();
+  const readTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastMarkedRef = useRef<string | null>(null);
 
   const query = useInfiniteQuery<
     Message[],
@@ -71,8 +70,7 @@ export function useMessages(chatId: string, virtuosoRef: React.RefObject<Virtuos
   }, [allMessages]);
 
   // Initialize new read detection hooks
-  const { visibleMessages, isMessageVisible } = useViewportDetection();
-  const { isAtBottom } = useScrollPosition(virtuosoRef);
+  const { isMessageVisible } = useViewportDetection();
   const { startViewing, stopViewing, isViewedLongEnough } = useMessageViewTimer();
   const { isChatOpen, isWindowFocused, isDocumentVisible } = useChatState();
 
@@ -80,41 +78,88 @@ export function useMessages(chatId: string, virtuosoRef: React.RefObject<Virtuos
   useEffect(() => {
     if (validMessages.length === 0 || !user?.id) return;
 
-    // Find unread incoming messages
-    const unreadMessages = validMessages.filter(
-      (m) => m.sender_id !== user.id && !isMessageVisible(m.id)
+    // If the chat isn't in an active reading state, clear pending timers
+    const chatIsActive = isChatOpen && isWindowFocused && isDocumentVisible && isAtBottom;
+    if (!chatIsActive) {
+      readTimersRef.current.forEach((timer, messageId) => {
+        clearTimeout(timer);
+        stopViewing(messageId);
+      });
+      readTimersRef.current.clear();
+      return;
+    }
+
+    // Find visible incoming messages (only those from other users)
+    const visibleIncoming = validMessages.filter(
+      (m) => m.sender_id !== user.id && isMessageVisible(m.id),
     );
 
-    if (unreadMessages.length === 0) return;
+    if (visibleIncoming.length === 0) return;
 
-    // Check all read criteria for each unread message
-    unreadMessages.forEach(message => {
-      // Full criteria check
-      const meetsAllCriteria = 
-        isChatOpen &&                    // Chat is open
-        isWindowFocused &&               // Window is focused
-        isDocumentVisible &&             // Document is visible
-        isAtBottom &&                  // User is at bottom of chat
-        isMessageVisible(message.id) &&   // Message is in viewport
-        isViewedLongEnough(message.id, 500); // Viewed for at least 500ms
+    // Target the newest visible incoming message
+    const targetMessage = visibleIncoming[visibleIncoming.length - 1];
 
-      if (meetsAllCriteria) {
-        // Start timing the view
-        startViewing(message.id);
+    if (!targetMessage || lastMarkedRef.current === targetMessage.id) return;
 
-        // Mark as read after minimum view time
-        const timer = setTimeout(() => {
-          markAsRead({ chatId, messageId: message.id });
-          stopViewing(message.id);
-        }, 500);
-
-        return () => {
-          clearTimeout(timer);
-          stopViewing(message.id);
-        };
+    // Cleanup timers for messages that are no longer visible or not the current target
+    const visibleIds = new Set(visibleIncoming.map((m) => m.id));
+    readTimersRef.current.forEach((timer, messageId) => {
+      if (!visibleIds.has(messageId) || messageId !== targetMessage.id) {
+        clearTimeout(timer);
+        readTimersRef.current.delete(messageId);
+        stopViewing(messageId);
       }
     });
-  }, [validMessages, user?.id, chatId, markAsRead, visibleMessages, isAtBottom, isWindowFocused, isDocumentVisible, isMessageVisible, isViewedLongEnough, startViewing, stopViewing]);
+
+    // Start viewing + schedule read only once
+    if (!readTimersRef.current.has(targetMessage.id)) {
+      startViewing(targetMessage.id);
+
+      const timer = setTimeout(() => {
+        const stillEligible =
+          isMessageVisible(targetMessage.id) &&
+          isAtBottom &&
+          isChatOpen &&
+          isWindowFocused &&
+          isDocumentVisible;
+
+        if (stillEligible && isViewedLongEnough(targetMessage.id, 500)) {
+          markAsRead({ chatId, messageId: targetMessage.id });
+          lastMarkedRef.current = targetMessage.id;
+        }
+
+        stopViewing(targetMessage.id);
+        readTimersRef.current.delete(targetMessage.id);
+      }, 500);
+
+      readTimersRef.current.set(targetMessage.id, timer);
+    }
+
+  }, [
+    validMessages,
+    user?.id,
+    chatId,
+    markAsRead,
+    isAtBottom,
+    isWindowFocused,
+    isDocumentVisible,
+    isMessageVisible,
+    isViewedLongEnough,
+    startViewing,
+    stopViewing,
+    isChatOpen,
+  ]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      readTimersRef.current.forEach((timer, messageId) => {
+        clearTimeout(timer);
+        stopViewing(messageId);
+      });
+      readTimersRef.current.clear();
+    };
+  }, [stopViewing]);
 
   return { ...query, messages: validMessages };
 }

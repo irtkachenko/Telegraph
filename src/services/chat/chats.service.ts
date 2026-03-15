@@ -1,11 +1,11 @@
-import { supabase } from '@/lib/supabase/client';
+﻿import { supabase } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat } from '@/types';
 
 export const chatsApi = {
   /**
-   * Отримання списку чатів поточного користувача з пагінацією
+   * РћС‚СЂРёРјР°РЅРЅСЏ СЃРїРёСЃРєСѓ С‡Р°С‚С–РІ РїРѕС‚РѕС‡РЅРѕРіРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° Р· РїР°РіС–РЅР°С†С–С”СЋ
    */
   getChats: async (userId: string, page = 1, limit = 20) => {
     const offset = (page - 1) * limit;
@@ -26,6 +26,7 @@ export const chatsApi = {
         )
       `)
       .or(`user_id.eq.${userId},recipient_id.eq.${userId}`)
+      .order('updated_at', { ascending: false, nullsFirst: false })
       .order('created_at', { foreignTable: 'messages', ascending: false })
       .limit(1, { foreignTable: 'messages' })
       .range(offset, offset + limit - 1);
@@ -41,25 +42,18 @@ export const chatsApi = {
       throw networkError;
     }
 
-    const normalizedChats = data as FullChat[];
-
-    // Сортуємо: чати з найновішими повідомленнями зверху
-    return normalizedChats.sort((a, b) => {
-      const dateA = a.messages?.[0]?.created_at || a.created_at;
-      const dateB = b.messages?.[0]?.created_at || b.created_at;
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
-    });
+    return data as FullChat[];
   },
 
   /**
-   * Отримання чатів для infinite query
+   * РћС‚СЂРёРјР°РЅРЅСЏ С‡Р°С‚С–РІ РґР»СЏ infinite query
    */
   getChatsInfinite: async (userId: string, pageParam = 1, limit = 20) => {
     return chatsApi.getChats(userId, pageParam, limit);
   },
 
   /**
-   * Створення нового чату
+   * РЎС‚РІРѕСЂРµРЅРЅСЏ РЅРѕРІРѕРіРѕ С‡Р°С‚Сѓ
    */
   createChat: async (payload: { user_id: string; recipient_id: string }) => {
     const { data, error } = await supabase
@@ -77,7 +71,7 @@ export const chatsApi = {
   },
 
   /**
-   * Видалення чату
+   * Р’РёРґР°Р»РµРЅРЅСЏ С‡Р°С‚Сѓ
    */
   deleteChat: async (chatId: string) => {
     const { error } = await supabase.from('chats').delete().eq('id', chatId);
@@ -86,7 +80,7 @@ export const chatsApi = {
   },
 
   /**
-   * Оновлення чату
+   * РћРЅРѕРІР»РµРЅРЅСЏ С‡Р°С‚Сѓ
    */
   updateChat: async (
     chatId: string,
@@ -106,3 +100,4 @@ export const chatsApi = {
     return data as FullChat;
   },
 };
+

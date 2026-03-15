@@ -30,13 +30,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const {
     messages,
     isLoading: isMessagesLoading,
     fetchPreviousPage,
     hasPreviousPage,
     isFetchingPreviousPage,
-  } = useMessages(id, virtuosoRef);
+  } = useMessages(id, isAtBottom);
 
   const { typingUsers, setTyping } = useChatEvents(id, supabaseUser);
   const { onlineUsers } = usePresence();
@@ -164,7 +165,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
             data={messages}
             followOutput="smooth"
             className="no-scrollbar"
-            atBottomStateChange={(atBottom) => setShowScrollButton(!atBottom)}
+            atBottomStateChange={(atBottom) => {
+              setShowScrollButton(!atBottom);
+              setIsAtBottom(atBottom);
+            }}
             startReached={() => {
               if (hasPreviousPage && !isFetchingPreviousPage) {
                 fetchPreviousPage();

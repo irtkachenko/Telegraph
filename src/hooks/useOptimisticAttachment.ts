@@ -1,5 +1,8 @@
 'use client';
 
+// NOTE: Deprecated. The app uses useOptimisticAttachmentLazy instead.
+// This hook is kept for reference and type usage in UI previews.
+
 import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';

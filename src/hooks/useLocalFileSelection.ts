@@ -1,5 +1,8 @@
 'use client';
 
+// NOTE: Deprecated. This hook is currently unused in the app.
+// Kept for reference and potential future reuse.
+
 import { useEffect, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { storageApi } from '@/services';

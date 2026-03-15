@@ -1,9 +1,8 @@
 'use client';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import type { ProfilerOnRenderCallback } from 'react';
-import { Profiler, useRef } from 'react';
+import { Profiler, lazy, Suspense, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
@@ -54,6 +53,14 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+  const ReactQueryDevtools =
+    process.env.NODE_ENV === 'development'
+      ? lazy(async () => {
+          const mod = await import('@tanstack/react-query-devtools');
+          return { default: mod.ReactQueryDevtools };
+        })
+      : null;
+
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalErrorBoundary>
@@ -69,7 +76,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           }}
         />
       </GlobalErrorBoundary>
-      <ReactQueryDevtools initialIsOpen={false} />
+      {ReactQueryDevtools ? (
+        <Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </Suspense>
+      ) : null}
     </QueryClientProvider>
   );
 }

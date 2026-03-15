@@ -6,8 +6,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { storageConfig, getUrlExpiryBuffer, getUrlCheckInterval } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
-import { handleError } from '@/shared/lib/error-handler';
-import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 
 const ImageModal = lazy(() => import('./ImageModal'));
@@ -67,53 +65,120 @@ const MediaPlaceholder = ({ reason = 'deleted' }: { reason?: 'deleted' | 'error'
 export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [processedUrls, setProcessedUrls] = useState<Map<string, CachedUrl>>(new Map());
+  const [refreshTick, setRefreshTick] = useState(0);
   const { getUrl } = useStorageUrl();
-  const processedCacheRef = useRef<Map<string, CachedUrl>>(new Map());
-  const failedCacheRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<Set<string>>(new Set());
+  const failedCacheRef = useRef<Map<string, number>>(new Map());
 
-  // Process attachment URLs
+  // Periodic refresh tick to re-check TTL
+  useEffect(() => {
+    const intervalMs = getUrlCheckInterval() * 1000;
+    if (intervalMs <= 0) return;
+
+    const id = setInterval(() => setRefreshTick((prev) => prev + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [getUrlCheckInterval]);
+
+  // Prune caches when items change
+  useEffect(() => {
+    if (!items || items.length === 0) return;
+    const keys = new Set(items.map((item) => `${item.id}:${item.url}`));
+
+    setProcessedUrls((prev) => {
+      let changed = false;
+      const next = new Map<string, CachedUrl>();
+      prev.forEach((value, key) => {
+        if (keys.has(key)) {
+          next.set(key, value);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+
+    failedCacheRef.current.forEach((_value, key) => {
+      if (!keys.has(key)) failedCacheRef.current.delete(key);
+    });
+  }, [items]);
+
+  // Resolve and refresh signed URLs
+  useEffect(() => {
+    if (!items || items.length === 0) return;
+
+    const now = Date.now();
+    const expiryMs = storageConfig.defaults.signedUrlExpiry * 1000;
+    const bufferMs = getUrlExpiryBuffer() * 1000;
+    const retryDelayMs = getUrlCheckInterval() * 1000;
+
+    items.forEach((item) => {
+      const cacheKey = `${item.id}:${item.url}`;
+      const originalUrl = item.url;
+
+      // Skip blob URLs (local previews)
+      if (originalUrl.startsWith('blob:')) {
+        return;
+      }
+
+      const cached = processedUrls.get(cacheKey);
+      const needsRefresh = !cached || cached.expiresAt - now <= bufferMs;
+
+      if (!needsRefresh) return;
+
+      const lastFailedAt = failedCacheRef.current.get(cacheKey);
+      if (lastFailedAt && now - lastFailedAt < retryDelayMs) return;
+
+      const ref = extractStorageRef(originalUrl);
+      if (!ref) return;
+
+      if (pendingRef.current.has(cacheKey)) return;
+      pendingRef.current.add(cacheKey);
+
+      getUrl(ref.bucket, ref.path)
+        .then((resolvedUrl) => {
+          setProcessedUrls((prev) => {
+            const next = new Map(prev);
+            next.set(cacheKey, { url: resolvedUrl, expiresAt: Date.now() + expiryMs });
+            return next;
+          });
+          failedCacheRef.current.delete(cacheKey);
+          setFailedUrls((prev) => {
+            if (!prev.has(originalUrl)) return prev;
+            const next = new Set(prev);
+            next.delete(originalUrl);
+            return next;
+          });
+        })
+        .catch(() => {
+          failedCacheRef.current.set(cacheKey, Date.now());
+          setFailedUrls((prev) => new Set(prev).add(originalUrl));
+        })
+        .finally(() => {
+          pendingRef.current.delete(cacheKey);
+        });
+    });
+  }, [items, getUrl, processedUrls, refreshTick, getUrlExpiryBuffer, getUrlCheckInterval]);
+
+  // Process attachment URLs for rendering
   const processedItems = useMemo(() => {
     if (!items || items.length === 0) {
       return [];
     }
 
-    // Return items with processing - async will happen in parallel
+    const now = Date.now();
+
     return items.map((item) => {
       const cacheKey = `${item.id}:${item.url}`;
-      const cached = processedCacheRef.current.get(cacheKey);
-      const now = Date.now();
-      
-      // Check cache first
+      const cached = processedUrls.get(cacheKey);
+
       if (cached && cached.expiresAt > now) {
         return { ...item, processedUrl: cached.url };
       }
-      if (failedCacheRef.current.has(cacheKey)) {
-        return { ...item, processedUrl: item.url };
-      }
 
-      // Handle different URL types
-      if (item.url.startsWith('blob:') || item.url.includes('?token=')) {
-        return { ...item, processedUrl: item.url };
-      }
-
-      // For other URLs, start async processing but return original for now
-      const ref = extractStorageRef(item.url);
-      if (ref) {
-        getUrl(ref.bucket, ref.path).then((resolvedUrl) => {
-          processedCacheRef.current.set(cacheKey, {
-            url: resolvedUrl,
-            expiresAt: now + (storageConfig.defaults.signedUrlExpiry * 1000),
-          });
-          // Trigger re-render by updating state
-          setFailedUrls(prev => new Set(prev));
-        }).catch(() => {
-          failedCacheRef.current.add(cacheKey);
-        });
-      }
-      
       return { ...item, processedUrl: item.url };
     });
-  }, [items, getUrl]);
+  }, [items, processedUrls, refreshTick]);
 
   if (!items || items.length === 0) {
     return <div className="hidden" />;
