@@ -27,8 +27,7 @@ export function useOptimisticAttachmentLazy() {
   const [attachments, setAttachments] = useState<LazyAttachment[]>([]);
   const { user } = useSupabaseAuth();
   const { validateFile, validateFiles } = useStorageLimits();
-  
-  
+
   // Constants for limits
   const MAX_FILES_PER_MESSAGE = getMaxFilesPerMessage();
   // Note: max total size comes from Supabase Storage API via useStorageLimits

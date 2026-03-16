@@ -1,8 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import type { OptimisticAttachment } from '@/types';
-import type { Message } from '@/types';
+import type { Message, OptimisticAttachment } from '@/types';
 import AttachmentPreview from './AttachmentPreview';
 
 interface ComposerAddonsProps {

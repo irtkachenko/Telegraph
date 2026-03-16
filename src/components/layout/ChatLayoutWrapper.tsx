@@ -28,6 +28,7 @@ export default function ChatLayoutWrapper({ children, sidebar, user }: ChatLayou
   useEffect(() => {
     if (pathname !== prevPathnameRef.current) {
       prevPathnameRef.current = pathname;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSidebarOpen(false);
     }
   }, [pathname]);

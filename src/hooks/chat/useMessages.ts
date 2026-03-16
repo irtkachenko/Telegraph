@@ -3,12 +3,12 @@
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { useChatState } from '@/hooks/ui/useChatState';
+import { useMessageViewTimer } from '@/hooks/ui/useMessageViewTimer';
+import { useViewportDetection } from '@/hooks/ui/useViewportDetection';
 import { messagesApi } from '@/services';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
-import { useViewportDetection } from '@/hooks/ui/useViewportDetection';
-import { useMessageViewTimer } from '@/hooks/ui/useMessageViewTimer';
-import { useChatState } from '@/hooks/ui/useChatState';
 
 /**
  * Hook for fetching and managing chat messages with infinite scroll and auto-read logic.
@@ -134,7 +134,6 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
 
       readTimersRef.current.set(targetMessage.id, timer);
     }
-
   }, [
     validMessages,
     user?.id,

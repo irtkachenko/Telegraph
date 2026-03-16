@@ -2,7 +2,7 @@
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ProfilerOnRenderCallback } from 'react';
-import { Profiler, lazy, Suspense, useRef } from 'react';
+import { lazy, Profiler, Suspense, useEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
@@ -13,10 +13,16 @@ import { queryClient } from '@/lib/query-client';
  */
 function RenderGuard({ children }: { children: React.ReactNode }) {
   const commitCount = useRef(0);
-  const lastResetTime = useRef(Date.now());
+  const lastResetTime = useRef(0);
   const lastToastTime = useRef(0);
+  const isDev = process.env.NODE_ENV === 'development';
 
-  if (process.env.NODE_ENV !== 'development') {
+  useEffect(() => {
+    if (!isDev) return;
+    lastResetTime.current = Date.now();
+  }, [isDev]);
+
+  if (!isDev) {
     return <>{children}</>;
   }
 

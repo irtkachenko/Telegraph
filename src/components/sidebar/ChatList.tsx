@@ -32,14 +32,15 @@ function ChatListBase() {
   const isBootstrapping = isAuthLoading || (!user && !data);
   const showInitialLoader = isBootstrapping || (isLoading && chats.length === 0);
 
-
   // Debug лог для Virtuoso
   const validChats = useMemo(() => {
     const filtered = chats.filter((chat) => chat?.id);
     const duplicateCheck = new Set(filtered.map((c) => c.id)).size !== filtered.length;
 
     if (duplicateCheck) {
-      console.error('❌ DUPLICATE CHAT IDS DETECTED!');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ DUPLICATE CHAT IDS DETECTED!');
+      }
     }
 
     return filtered;
@@ -65,7 +66,6 @@ function ChatListBase() {
     const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
     const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
     const partnerImage = partner?.image;
-
 
     const lastMessage = chat.messages?.[0];
 
@@ -230,7 +230,6 @@ function ChatListBase() {
           style={{ height: '100%' }}
         />
       ) : null}
-
 
       <ConfirmationDialog
         open={!!chatToDelete}

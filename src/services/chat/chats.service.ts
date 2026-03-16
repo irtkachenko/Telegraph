@@ -55,19 +55,26 @@ export const chatsApi = {
   /**
    * Create new chat
    */
-  createChat: async (payload: { user_id: string; recipient_id: string }) => {
-    const { data, error } = await supabase
+  createChat: async (payload: { recipient_id: string }) => {
+    const { data, error } = await supabase.rpc('rpc_create_chat', {
+      p_recipient_id: payload.recipient_id,
+    });
+
+    if (error) throw error;
+    const { data: fullChat, error: fetchError } = await supabase
       .from('chats')
-      .insert(payload)
-      .select(`
+      .select(
+        `
         *,
         user:user_id(*),      
         recipient:recipient_id(*)
-      `)
+      `,
+      )
+      .eq('id', (data as FullChat).id)
       .single();
 
-    if (error) throw error;
-    return data as FullChat;
+    if (fetchError) throw fetchError;
+    return fullChat as FullChat;
   },
 
   /**
@@ -100,4 +107,3 @@ export const chatsApi = {
     return data as FullChat;
   },
 };
-

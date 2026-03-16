@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
@@ -118,10 +118,12 @@ export default function ChatInput({
         if (onEditCancel) onEditCancel();
       } else {
         // ВІДПРАВКА НОВОГО з файлами
+        const clientId = crypto.randomUUID();
         await sendMessageWithFiles.mutateAsync({
           content: trimmed,
           files: filesToSend,
           reply_to_id: replyToId || undefined,
+          client_id: clientId,
         });
         // Clear reply state only after successful send
         if (onReplyCancel) onReplyCancel();

@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { getDefaultMaxFileSize } from '@/config/storage.config';
-import { useStorageConfig } from './useStorageConfig';
 import { getMaxFilesPerMessage } from '@/config/upload.config';
+import { useStorageConfig } from './useStorageConfig';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -53,8 +53,8 @@ export function useStorageLimits() {
     if (!mimeType) return true;
 
     // Check if allowedTypes contains MIME types (has '/') or extensions (no '/')
-    const hasMimeTypes = config.limits.allowedTypes.some(type => type.includes('/'));
-    
+    const hasMimeTypes = config.limits.allowedTypes.some((type) => type.includes('/'));
+
     if (hasMimeTypes) {
       // Use MIME type validation
       return config.limits.allowedTypes.some((type) => {
@@ -67,9 +67,10 @@ export function useStorageLimits() {
       // Extract extension from MIME type or use common mappings
       const extensionFromMime = mimeType.split('/')[1]?.toLowerCase();
       if (extensionFromMime) {
-        return config.limits.allowedTypes.some(ext => 
-          ext.toLowerCase() === `.${extensionFromMime}` || 
-          ext.toLowerCase() === extensionFromMime
+        return config.limits.allowedTypes.some(
+          (ext) =>
+            ext.toLowerCase() === `.${extensionFromMime}` ||
+            ext.toLowerCase() === extensionFromMime,
         );
       }
       // If we can't extract extension from MIME, allow the file
@@ -89,11 +90,11 @@ export function useStorageLimits() {
     // Prefer MIME validation if available
     if (config && !isAllowedMimeType(file.type)) {
       // Try extension fallback if MIME validation fails
-      if (!config.limits.allowedTypes.some(type => type.includes('/'))) {
+      if (!config.limits.allowedTypes.some((type) => type.includes('/'))) {
         // Only extensions are provided, check extension directly
         const fileExt = `.${extension}`;
-        const allowedExtension = config.limits.allowedTypes.some(ext => 
-          ext.toLowerCase() === fileExt || ext.toLowerCase() === extension
+        const allowedExtension = config.limits.allowedTypes.some(
+          (ext) => ext.toLowerCase() === fileExt || ext.toLowerCase() === extension,
         );
         if (!allowedExtension) {
           return { valid: false, error: 'File type not supported' };

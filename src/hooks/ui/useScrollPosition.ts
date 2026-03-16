@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
@@ -11,50 +11,57 @@ export interface ScrollPositionResult {
 }
 
 /**
- * Hook для відстеження scroll position в Virtuoso
+ * Hook РґР»СЏ РІС–РґСЃС‚РµР¶РµРЅРЅСЏ scroll position РІ Virtuoso
  */
-export function useScrollPosition(virtuosoRef: React.RefObject<VirtuosoHandle | null>): ScrollPositionResult {
+export function useScrollPosition(
+  virtuosoRef: React.RefObject<VirtuosoHandle | null>,
+): ScrollPositionResult {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [scrollPercentage, setScrollPercentage] = useState(100);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Перевіряємо позицію скролу
+  // РџРµСЂРµРІС–СЂСЏС”РјРѕ РїРѕР·РёС†С–СЋ СЃРєСЂРѕР»Сѓ
   const checkScrollPosition = useCallback(() => {
     const virtuoso = virtuosoRef.current;
     if (!virtuoso) return;
 
     try {
-      // Спрощена перевірка - просто оновлюємо стан
+      // РЎРїСЂРѕС‰РµРЅР° РїРµСЂРµРІС–СЂРєР° - РїСЂРѕСЃС‚Рѕ РѕРЅРѕРІР»СЋС”РјРѕ СЃС‚Р°РЅ
       setIsAtBottom(true);
       setScrollPercentage(100);
     } catch (error) {
-      console.warn('Error checking scroll position:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Error checking scroll position:', error);
+      }
     }
   }, [virtuosoRef]);
 
-  // Прокрутка до кінця
+  // РџСЂРѕРєСЂСѓС‚РєР° РґРѕ РєС–РЅС†СЏ
   const scrollToBottom = useCallback(() => {
     const virtuoso = virtuosoRef.current;
     if (!virtuoso) return;
 
     virtuoso.scrollToIndex({
-      index: -1, // Останній елемент
+      index: -1, // РћСЃС‚Р°РЅРЅС–Р№ РµР»РµРјРµРЅС‚
       behavior: 'smooth',
       align: 'end',
     });
   }, [virtuosoRef]);
 
-  // Прокрутка до конкретного повідомлення
-  const scrollToMessage = useCallback((index: number) => {
-    const virtuoso = virtuosoRef.current;
-    if (!virtuoso) return;
+  // РџСЂРѕРєСЂСѓС‚РєР° РґРѕ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ
+  const scrollToMessage = useCallback(
+    (index: number) => {
+      const virtuoso = virtuosoRef.current;
+      if (!virtuoso) return;
 
-    virtuoso.scrollToIndex({
-      index,
-      behavior: 'smooth',
-      align: 'center',
-    });
-  }, [virtuosoRef]);
+      virtuoso.scrollToIndex({
+        index,
+        behavior: 'smooth',
+        align: 'center',
+      });
+    },
+    [virtuosoRef],
+  );
 
   // Cleanup
   useEffect(() => {
@@ -72,3 +79,4 @@ export function useScrollPosition(virtuosoRef: React.RefObject<VirtuosoHandle | 
     scrollToMessage,
   };
 }
+

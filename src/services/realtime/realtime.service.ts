@@ -65,7 +65,10 @@ export const realtimeApi = {
   /**
    * Subscribe to typing indicators via broadcast
    */
-  subscribeToTyping: (channel: RealtimeChannel, callback: (payload: { payload: any }) => void) => {
+  subscribeToTyping: (
+    channel: RealtimeChannel,
+    callback: (payload: { payload: Record<string, unknown> }) => void,
+  ) => {
     return channel.on('broadcast', { event: 'typing' }, callback);
   },
 
@@ -113,7 +116,7 @@ export const realtimeApi = {
   broadcast: async (
     channel: RealtimeChannel,
     event: string,
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
   ): Promise<RealtimeChannelSendResponse> => {
     return channel.send({
       type: 'broadcast',
@@ -125,7 +128,7 @@ export const realtimeApi = {
   /**
    * Track user presence state
    */
-  trackPresence: (channel: RealtimeChannel, state: Record<string, any>) => {
+  trackPresence: (channel: RealtimeChannel, state: Record<string, unknown>) => {
     return channel.track(state);
   },
 

@@ -44,10 +44,3 @@ export function isSupabaseStorageUrl(url: string): boolean {
 export function createStorageRef(bucket: string, path: string): StorageRef {
   return { bucket, path };
 }
-
-/**
- * Converts storage reference to public URL format
- */
-export function storageRefToPublicUrl(ref: StorageRef): string {
-  return `/${ref.bucket}/${ref.path}`;
-}

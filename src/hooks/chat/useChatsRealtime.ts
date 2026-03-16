@@ -1,46 +1,13 @@
-'use client';
+﻿'use client';
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { realtimeApi, type RealtimeMessagePayload } from '@/services';
+import { type RealtimeMessagePayload, realtimeApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat, Message } from '@/types';
 import { updateChatMessageIfMatches, upsertChatLastMessage } from './chats-cache';
-
-interface MessagePayload {
-  id: string;
-  chat_id: string;
-  sender_id: string;
-  content: string | null;
-  created_at: string;
-  updated_at?: string | null;
-  attachments?: Message['attachments'];
-  [key: string]: unknown;
-}
-
-interface RealtimePayload<T = Record<string, unknown>> {
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-  new: T;
-  old: Partial<T>;
-  errors?: string[];
-}
-
-function validatePayload<T>(
-  payload: RealtimePayload<T>,
-  requiredFields: (keyof T)[],
-): payload is RealtimePayload<T> {
-  if (!payload || typeof payload !== 'object') return false;
-  if (payload.errors && payload.errors.length > 0) return false;
-  if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-    if (!payload.new || typeof payload.new !== 'object') return false;
-    for (const field of requiredFields) {
-      if (!(field in payload.new)) return false;
-    }
-  }
-  return true;
-}
 
 export function useChatsRealtime(user: User | null) {
   const queryClient = useQueryClient();
@@ -54,7 +21,9 @@ export function useChatsRealtime(user: User | null) {
       try {
         realtimeApi.unsubscribe(channelRef.current);
       } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
         console.warn('Error unsubscribing from existing channel:', error);
+      }
       }
       channelRef.current = null;
     }
@@ -64,7 +33,7 @@ export function useChatsRealtime(user: User | null) {
 
     const handleInsert = (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
-      
+
       const newMessage = payload.new as Message;
 
       // 1. Update chat list (last message preview)
@@ -73,8 +42,10 @@ export function useChatsRealtime(user: User | null) {
       );
 
       // 2. Update specific chat messages cache
-      queryClient.setQueryData(['messages', newMessage.chat_id], (old: any) => {
-        if (!old) return old;
+      queryClient.setQueryData<InfiniteData<Message[]>>(
+        ['messages', newMessage.chat_id],
+        (old) => {
+          if (!old) return old;
 
         // Check for duplicates (if we sent the message ourselves and already have an optimistic or real entry)
         const exists = old.pages.some((page: Message[]) =>
@@ -86,13 +57,14 @@ export function useChatsRealtime(user: User | null) {
         const lastPageIdx = newPages.length - 1;
         newPages[lastPageIdx] = [...newPages[lastPageIdx], newMessage];
 
-        return { ...old, pages: newPages };
-      });
+          return { ...old, pages: newPages };
+        },
+      );
     };
 
     const handleUpdate = (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
-      
+
       const updatedMessage = payload.new as Message;
       if (!updatedMessage?.id || !updatedMessage?.chat_id) return;
 
@@ -112,20 +84,23 @@ export function useChatsRealtime(user: User | null) {
       );
 
       // 2. Update specific message in chat messages cache
-      queryClient.setQueryData(['messages', updatedMessage.chat_id], (old: any) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page: Message[]) =>
-            page.map((m) => (m.id === normalizedMessage.id ? normalizedMessage : m)),
-          ),
-        };
-      });
+      queryClient.setQueryData<InfiniteData<Message[]>>(
+        ['messages', updatedMessage.chat_id],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: Message[]) =>
+              page.map((m) => (m.id === normalizedMessage.id ? normalizedMessage : m)),
+            ),
+          };
+        },
+      );
     };
 
     const handleDelete = (payload: RealtimeMessagePayload) => {
       if (!payload.old || typeof payload.old !== 'object' || !('id' in payload.old)) return;
-      
+
       const deletedId = payload.old.id as string;
       const deletedChatId = payload.old.chat_id as string;
       if (!deletedId || !deletedChatId) return;
@@ -144,13 +119,16 @@ export function useChatsRealtime(user: User | null) {
       );
 
       // 2. Remove from messages cache
-      queryClient.setQueryData(['messages', deletedChatId], (old: any) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page: Message[]) => page.filter((m) => m.id !== deletedId)),
-        };
-      });
+      queryClient.setQueryData<InfiniteData<Message[]>>(
+        ['messages', deletedChatId],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: Message[]) => page.filter((m) => m.id !== deletedId)),
+          };
+        },
+      );
     };
 
     realtimeApi.subscribeToAllMessages(channel, (payload: RealtimeMessagePayload) => {
@@ -166,7 +144,7 @@ export function useChatsRealtime(user: User | null) {
             handleDelete(payload);
             break;
         }
-      } catch (error) {
+      } catch (_error) {
         handleError(
           new NetworkError(
             'Failed to process realtime message',
@@ -197,10 +175,13 @@ export function useChatsRealtime(user: User | null) {
         try {
           realtimeApi.unsubscribe(channelRef.current);
         } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
           console.warn('Error during channel cleanup:', error);
+        }
         }
         channelRef.current = null;
       }
     };
   }, [user?.id, queryClient]);
 }
+

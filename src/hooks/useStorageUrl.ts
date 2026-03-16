@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
-import { type StorageConfig, storageConfig } from '@/config/storage.config';
 import { storageApi } from '@/services';
-import { AuthError, NetworkError } from '@/shared/lib/errors';
+import { NetworkError } from '@/shared/lib/errors';
 
 interface SignedUrlOptions {
   expiresIn?: number; // Default: from config
