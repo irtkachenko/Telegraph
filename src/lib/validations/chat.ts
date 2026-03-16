@@ -83,7 +83,7 @@ export const searchSchema = z.object({
     }),
 });
 
-// File upload validation schema - динамічні налаштування
+// File upload validation schema - dynamic settings
 export const createFileUploadSchema = (maxSize: number, allowedTypes: string[]) =>
   z
     .object({
@@ -106,7 +106,7 @@ export const createFileUploadSchema = (maxSize: number, allowedTypes: string[]) 
       },
     );
 
-// Individual file validation - динамічні налаштування
+// Individual file validation - dynamic settings
 export const createSingleFileSchema = (maxSize: number, allowedTypes: string[]) =>
   z
     .object({
@@ -135,6 +135,6 @@ export type ProfileInput = z.infer<typeof profileSchema>;
 export type ChatMembershipInput = z.infer<typeof chatMembershipSchema>;
 export type MarkAsReadInput = z.infer<typeof markAsReadSchema>;
 export type SearchInput = z.infer<typeof searchSchema>;
-// Динамічні типи для валідації файлів
+// Dynamic types for file validation
 export type FileUploadInput = ReturnType<typeof createFileUploadSchema>;
 export type SingleFileInput = ReturnType<typeof createSingleFileSchema>;

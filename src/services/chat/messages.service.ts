@@ -122,6 +122,38 @@ export const messagesApi = {
   ),
 
   /**
+   * Get a single message by ID with reply details
+   */
+  getMessage: withRateLimitFn(
+    async (messageId: string) => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*, reply_to:reply_to_id(*), "users":sender_id(id, name, image), updated_at')
+        .eq('id', messageId)
+        .single();
+
+      if (error) {
+        const networkError = new NetworkError(
+          error.message,
+          'messages',
+          'MESSAGE_GET_ERROR',
+          error.status || 404,
+        );
+        handleError(networkError, 'MessagesApi.getMessage');
+        throw networkError;
+      }
+
+      const normalizedData = {
+        ...data,
+        attachments: data.attachments || [],
+      } as Message;
+
+      return normalizedData;
+    },
+    { ...RATE_LIMITS.MESSAGE_READ, name: 'getMessage' },
+  ),
+
+  /**
    * Edit an existing message
    */
   editMessage: withRateLimitFn(

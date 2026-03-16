@@ -5,8 +5,8 @@ import { useEffect } from 'react';
 import { usePresenceSubscription } from '@/store/usePresenceStore';
 
 /**
- * Хук для глобального реалтайму (presence, сповіщення).
- * Має бути викликаний на верхньому рівні (AuthProvider).
+ * Hook for global realtime (presence, notifications).
+ * Must be called at top level (AuthProvider).
  */
 export function useGlobalRealtime(user: User | null) {
   const { subscribe, unsubscribe } = usePresenceSubscription();

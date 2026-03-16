@@ -21,7 +21,7 @@ export async function handleSignIn() {
 export async function handleSignOut() {
   const supabase = createClient();
 
-  // Оновлюємо статус перед виходом
+  // Update status before sign out
   try {
     await supabase.rpc('update_last_seen');
   } catch (e) {

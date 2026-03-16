@@ -122,21 +122,21 @@ function showErrorToast(error: AppError) {
 function getToastTitle(error: AppError): string {
   switch (error.constructor.name) {
     case 'AuthError':
-      return 'Помилка авторизації';
+      return 'Authorization error';
     case 'PermissionError':
-      return 'Доступ заборонено';
+      return 'Access denied';
     case 'ValidationError':
-      return 'Помилка валідації';
+      return 'Validation error';
     case 'NetworkError':
-      return 'Мережева помилка';
+      return 'Network error';
     case 'NotFoundError':
-      return 'Не знайдено';
+      return 'Not found';
     case 'DatabaseError':
-      return 'Помилка бази даних';
+      return 'Database error';
     case 'ConfigError':
-      return 'Помилка конфігурації';
+      return 'Configuration error';
     default:
-      return 'Помилка';
+      return 'Error';
   }
 }
 
@@ -150,7 +150,7 @@ function getToastDescription(error: AppError): string {
   }
 
   // For critical/unexpected errors, show a generic message
-  return 'Сталася неочікувана помилка. Спробуйте ще раз.';
+  return 'An unexpected error occurred. Please try again.';
 }
 
 /**

@@ -6,7 +6,7 @@ import type { User } from '@/types';
 
 export const contactsApi = {
   /**
-   * Пошук користувачів (контактів)
+   * Search users (contacts)
    */
   searchUsers: async (currentUserId: string, queryText: string) => {
     let query = supabase

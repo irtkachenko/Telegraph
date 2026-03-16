@@ -2,26 +2,26 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 import type { AppUser, UserMetadata } from './index';
 
 /**
- * Утиліти для роботи з користувачем
+ * User utilities
  */
 export const UserUtils = {
   normalize(supabaseUser: SupabaseUser, dbUser?: Partial<AppUser> | null): AppUser {
     const metadata = (supabaseUser.user_metadata as UserMetadata) || {};
 
     return {
-      // Supabase поля
+      // Supabase fields
       id: supabaseUser.id,
       email: supabaseUser.email || '',
       email_confirmed_at: supabaseUser.email_confirmed_at,
       phone: supabaseUser.phone,
       user_metadata: metadata,
 
-      // Database поля (з пріоритетом DB)
+      // Database fields (with DB priority)
       name: dbUser?.name || metadata.name || metadata.full_name || null,
       image: dbUser?.image || metadata.avatar_url || metadata.picture || null,
       last_seen: dbUser?.last_seen || null,
 
-      // Обчислювані
+      // Computed
       is_online: UserUtils.isUserOnline(dbUser?.last_seen),
       display_name: UserUtils.getDisplayName(supabaseUser, dbUser),
     };
@@ -67,14 +67,14 @@ export const UserUtils = {
 };
 
 /**
- * Type guards для безпечної роботи
+ * Type guards for safe operations
  */
 export function isAppUser(user: unknown): user is AppUser {
   return !!(user && typeof user === 'object' && 'id' in user && 'email' in user);
 }
 
 /**
- * Hook – проста обгортка над нормалізацією
+ * Hook - simple wrapper over normalization
  */
 export function useNormalizedUser(
   supabaseUser: SupabaseUser | null,

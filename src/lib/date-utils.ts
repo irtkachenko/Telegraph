@@ -5,12 +5,12 @@ import { uk } from 'date-fns/locale';
 type DateInput = string | number | Date | null | undefined;
 
 /**
- * Перетворює будь-яку дату від Supabase у валідний таймстамп (ms)
+ * Converts any date from Supabase to valid timestamp (ms)
  */
 export function getSafeTimestamp(date: DateInput): number {
   if (!date) return 0;
   try {
-    // Твоя фірмова логіка очистки рядка
+    // Your custom string cleanup logic
     const dateString =
       typeof date === 'string' && !date.includes('Z') && !date.includes('+')
         ? `${date.replace(' ', 'T')}Z`
@@ -29,7 +29,7 @@ export function formatMessageDate(date: DateInput) {
   const d = new Date(ts);
 
   if (isToday(d)) return format(d, 'HH:mm');
-  if (isYesterday(d)) return `Вчора, ${format(d, 'HH:mm')}`;
+  if (isYesterday(d)) return `Yesterday, ${format(d, 'HH:mm')}`;
 
   return format(d, 'd MMM, HH:mm', { locale: uk });
 }
@@ -40,7 +40,7 @@ export function formatRelativeTime(date: DateInput) {
   const d = new Date(ts);
 
   if (isToday(d)) return format(d, 'HH:mm');
-  if (isYesterday(d)) return 'Вчора';
+  if (isYesterday(d)) return 'Yesterday';
 
   return format(d, 'dd.MM.yy');
 }

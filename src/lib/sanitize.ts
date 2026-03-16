@@ -1,23 +1,23 @@
 /**
- * Утиліти для санітизації вхідних даних
- * Використовуються для захисту від SQL/ILIKE-ін'єкцій та XSS
+ * Utilities for sanitizing input data
+ * Used for protection against SQL/ILIKE injections and XSS
  */
 
 /**
- * Ескейпить спеціальні символи ILIKE-патерну в PostgreSQL.
+ * Escapes special ILIKE pattern characters in PostgreSQL.
  *
- * У SQL `ILIKE` є 3 спеціальні символи:
- * - `%` — відповідає будь-якій кількості символів (аналог `*` в glob)
- * - `_` — відповідає рівно одному символу (аналог `?` в glob)
- * - `\` — escape-символ
+ * In SQL `ILIKE` there are 3 special characters:
+ * - `%` - matches any number of characters (similar to `*` in glob)
+ * - `_` - matches exactly one character (similar to `?` in glob)
+ * - `\` - escape character
  *
- * Якщо їх не екранувати, зловмисник може:
- * 1. Ввести `%` і отримати ВСІ записи (bypassing search limits)
- * 2. Ввести `_` для pattern-matching атак
- * 3. Ввести `\` для зламу ескейпінгу
+ * If not escaped, attacker can:
+ * 1. Enter `%` and get ALL records (bypassing search limits)
+ * 2. Enter `_` for pattern-matching attacks
+ * 3. Enter `\` to break escaping
  *
- * @param input — рядок, що потрібно обезпечити для використання в ILIKE
- * @returns — безпечний рядок з екранованими спеціальними символами
+ * @param input - string to secure for use in ILIKE
+ * @returns - safe string with escaped special characters
  *
  * @example
  * ```ts
@@ -31,14 +31,14 @@ export function escapeIlike(input: string): string {
 }
 
 /**
- * Санітизує текст пошукового запиту:
- * 1. Обрізає пробіли з країв
- * 2. Обмежує максимальну довжину (захист від DoS)
- * 3. Ескейпить ILIKE-спеціальні символи
+ * Sanitizes search query text:
+ * 1. Trims whitespace from edges
+ * 2. Limits maximum length (DoS protection)
+ * 3. Escapes ILIKE special characters
  *
- * @param input — оригінальний пошуковий запит від користувача
- * @param maxLength — максимальна довжина запиту (за замовчуванням 100)
- * @returns — безпечний для використання в ILIKE рядок
+ * @param input - original search query from user
+ * @param maxLength - maximum query length (default 100)
+ * @returns - safe string for use in ILIKE
  *
  * @example
  * ```ts
@@ -52,11 +52,11 @@ export function sanitizeSearchQuery(input: string, maxLength = 100): string {
 }
 
 /**
- * Валідує URL для безпечного відображення в Linkify
- * Дозволяє тільки http/https протоколи для захисту від XSS
+ * Validates URL for safe display in Linkify
+ * Allows only http/https protocols for XSS protection
  *
- * @param url — URL для валідації
- * @returns — true якщо URL безпечний, false в іншому випадку
+ * @param url - URL to validate
+ * @returns - true if URL is safe, false otherwise
  *
  * @example
  * ```ts

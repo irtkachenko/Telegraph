@@ -3,7 +3,7 @@
 import { usePresenceStore } from '@/store/usePresenceStore';
 
 /**
- * Хук для отримання списку онлайн-користувачів.
+ * Hook for getting online users list.
  */
 export function usePresence() {
   const onlineUsers = usePresenceStore((state) => state.onlineUsers);

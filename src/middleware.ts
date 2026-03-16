@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { isStaticAsset } from '@/config/storage.config';
 import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
-export async function middleware(request: NextRequest) {
+export default async function middleware(request: NextRequest) {
   // Skip middleware for API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next();
@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
   const { supabase, supabaseResponse } = await createMiddlewareClient(request);
 
   try {
-    // ВАЖЛИВО: Отримуємо юзера. Це оновлює токен у куках, якщо він прострочений
+    // Get user and update token if expired
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
 
       supabaseResponse.cookies
         .getAll()
-        .forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
+        .forEach((c: any) => redirectResponse.cookies.set(c.name, c.value, c));
       return redirectResponse;
     }
 
@@ -41,7 +41,7 @@ export async function middleware(request: NextRequest) {
 
       supabaseResponse.cookies
         .getAll()
-        .forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
+        .forEach((c: any) => redirectResponse.cookies.set(c.name, c.value, c));
       return redirectResponse;
     }
   } catch (e) {

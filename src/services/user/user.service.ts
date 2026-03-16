@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 
 export const userApi = {
   /**
-   * Оновлення статусу "востаннє в мережі"
+   * Update "last seen" status
    */
   updateLastSeen: async () => {
     const { error } = await supabase.rpc('update_last_seen');

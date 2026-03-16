@@ -20,8 +20,8 @@ export interface LazyAttachment {
 }
 
 /**
- * Хук для роботи з файлами без миттєвого завантаження
- * Файли готуються до відправки, але завантажуються тільки при відправці повідомлення
+ * Hook for working with files without instant upload
+ * Files are prepared for sending, but uploaded only when message is sent
  */
 export function useOptimisticAttachmentLazy() {
   const [attachments, setAttachments] = useState<LazyAttachment[]>([]);
@@ -29,11 +29,11 @@ export function useOptimisticAttachmentLazy() {
   const { validateFile, validateFiles } = useStorageLimits();
   
   
-  // Константи для лімітів
+  // Constants for limits
   const MAX_FILES_PER_MESSAGE = getMaxFilesPerMessage();
   // Note: max total size comes from Supabase Storage API via useStorageLimits
 
-  // Очищення URL-прев'ю при розмонтуванні компонента
+  // Cleanup preview URLs on component unmount
   useEffect(() => {
     return () => {
       attachments.forEach((a) => {
@@ -45,18 +45,18 @@ export function useOptimisticAttachmentLazy() {
   const addFile = async (file: File): Promise<LazyAttachment | null> => {
     if (!user) {
       handleError(
-        new AuthError('Ви не авторизовані', 'UPLOAD_AUTH_REQUIRED', 401),
+        new AuthError('You are not authorized', 'UPLOAD_AUTH_REQUIRED', 401),
         'OptimisticAttachmentLazy',
       );
       return null;
     }
 
-    // Валідація файлу
+    // File validation
     const validation = validateFile(file);
     if (!validation.valid) {
       handleError(
         new ValidationError(
-          validation.error || 'Помилка валідації файлу',
+          validation.error || 'File validation error',
           'file',
           'FILE_VALIDATION_ERROR',
           400,
@@ -69,7 +69,7 @@ export function useOptimisticAttachmentLazy() {
     const id = crypto.randomUUID();
     const previewUrl = URL.createObjectURL(file);
 
-    // Визначаємо тип файлу на основі MIME типу
+    // Determine file type based on MIME type
     let type: 'image' | 'video' | 'file';
     if (file.type.startsWith('image/')) {
       type = 'image';
@@ -95,7 +95,7 @@ export function useOptimisticAttachmentLazy() {
     const validFiles: File[] = [];
     const errors: string[] = [];
 
-    // Перевіряємо кожен файл окремо
+    // Check each file individually
     for (const file of files) {
       const validation = validateFile(file);
       if (validation.valid) {
@@ -105,14 +105,14 @@ export function useOptimisticAttachmentLazy() {
       }
     }
 
-    // Перевіряємо ліміти ПРИ ДОДАВАННІ файлів
+    // Check limits WHEN ADDING files
     const currentFilesCount = attachments.length;
     const currentTotalSize = attachments.reduce((sum, a) => sum + a.metadata.size, 0);
 
     const allowedFiles: File[] = [];
     const rejectedFiles: File[] = [];
 
-    // Розраховуємо скільки файлів можна додати
+    // Calculate how many files can be added
     const remainingSlots = MAX_FILES_PER_MESSAGE - currentFilesCount;
     // Note: max total size comes from Supabase Storage API via useStorageLimits
     // For now, use the same default as in useDynamicStorageConfig
@@ -129,24 +129,24 @@ export function useOptimisticAttachmentLazy() {
       }
     }
 
-    // Показуємо помилки про перевищення лімітів
+    // Show errors about exceeded limits
     if (rejectedFiles.length > 0) {
       const rejectedNames = rejectedFiles.map((f) => f.name).join(', ');
       toast.error(
-        `Забагато файлів! Максимально ${getMaxFilesPerMessage()} файли на повідомлення. Не додано: ${rejectedNames}`,
+        `Too many files! Maximum ${getMaxFilesPerMessage()} files per message. Not added: ${rejectedNames}`,
       );
     }
 
     if (errors.length > 0) {
-      toast.error(`Помилки валідації: ${errors.join(', ')}`);
+      toast.error(`Validation errors: ${errors.join(', ')}`);
     }
 
-    // Якщо є помилки валідації окремих файлів (не ліміти)
+    // If there are validation errors for individual files (not limits)
     if (errors.length > 0 && rejectedFiles.length === 0) {
       return [];
     }
 
-    // Додаємо тільки дозволені файли
+    // Add only allowed files
     if (allowedFiles.length === 0) {
       return [];
     }
@@ -183,7 +183,7 @@ export function useOptimisticAttachmentLazy() {
     return attachments.map(({ file, previewUrl, ...attachment }) => ({
       ...attachment,
       url: previewUrl,
-      uploading: false, // Буде встановлено в true при відправці
+      uploading: false, // Will be set to true when sending
     }));
   };
 

@@ -1,6 +1,6 @@
 /**
- * Rate limiter для Server Actions
- * Використовує LRU cache для зберігання кількості запитів
+ * Rate limiter for Server Actions
+ * Uses LRU cache to store request counts
  */
 
 import { LRUCache } from 'lru-cache';
@@ -10,49 +10,49 @@ type RateLimitOptions = {
   maxRequests: number;
 };
 
-// Cache для зберігання лічильників запитів з записами {count, windowStart}
+// Cache for storing request counters with entries {count, windowStart}
 // Key: identifier, Value: { count, windowStart }
 const rateLimitCache = new LRUCache<string, { count: number; windowStart: number }>({
-  max: 1000, // Максимальна кількість унікальних користувачів
-  ttl: 5 * 60 * 1000, // 5 хвилин — покриває всі можливі вікна
+  max: 1000, // Maximum number of unique users
+  ttl: 5 * 60 * 1000, // 5 minutes - covers all possible windows
 });
 
 /**
- * Перевіряє, чи не перевищено ліміт запитів
- * @param identifier - Унікальний ідентифікатор (userId, IP, etc.)
- * @param options - Налаштування rate limiting
- * @returns true якщо дозволено, false якщо ліміт перевищено
+ * Checks if request limit is exceeded
+ * @param identifier - Unique identifier (userId, IP, etc.)
+ * @param options - Rate limiting settings
+ * @returns true if allowed, false if limit exceeded
  */
 export function rateLimit(identifier: string, options: RateLimitOptions): boolean {
   const now = Date.now();
   const existing = rateLimitCache.get(identifier);
 
-  // Якщо записи немає або вікно сплило — скидаємо лічильник
+  // If no entry or window expired - reset counter
   if (!existing || now - existing.windowStart >= options.windowMs) {
     rateLimitCache.set(identifier, { count: 1, windowStart: now });
     return true;
   }
 
-  // Перевіряємо ліміт
+  // Check limit
   if (existing.count >= options.maxRequests) {
     return false; // Rate limit exceeded
   }
 
-  // Збільшуємо лічильник
+  // Increase counter
   existing.count++;
   rateLimitCache.set(identifier, existing);
   return true;
 }
 
 /**
- * Очищує застарілі записи (викликається періодично)
+ * Cleans up stale entries (called periodically)
  */
 export function cleanupRateLimitCache(): void {
   rateLimitCache.purgeStale();
 }
 
 /**
- * Отримує статистику по rate limiting
+ * Gets rate limiting statistics
  */
 export function getRateLimitStats(): {
   size: number;

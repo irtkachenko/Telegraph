@@ -9,8 +9,8 @@ interface StoragePolicies {
   maxFileSize: number;
   allowedExtensions: string[];
   rateLimitPerMinute: number;
-  maxTotalSize: number; // Загальний ліміт для групи файлів
-  maxFilesPerMessage: number; // Максимальна кількість файлів на повідомлення
+  maxTotalSize: number; // Total limit for group of files
+  maxFilesPerMessage: number; // Maximum number of files per message
 }
 
 // Default fallback configuration
@@ -18,8 +18,8 @@ const DEFAULT_POLICIES: StoragePolicies = {
   maxFileSize: 50 * 1024 * 1024, // 50MB
   allowedExtensions: [], // Will be populated from Supabase API
   rateLimitPerMinute: 10,
-  maxTotalSize: 100 * 1024 * 1024, // 100MB загальний ліміт на повідомлення
-  maxFilesPerMessage: getMaxFilesPerMessage(), // Використовуємо конфіг додатку
+  maxTotalSize: 100 * 1024 * 1024, // 100MB total limit per message
+  maxFilesPerMessage: getMaxFilesPerMessage(), // Use app config
 };
 
 export function useDynamicStorageConfig() {
@@ -96,16 +96,16 @@ export function useStorageLimits() {
           ext.toLowerCase() === fileExt || ext.toLowerCase() === extension
         );
         if (!allowedExtension) {
-          return { valid: false, error: 'Тип файлу не підтримується' };
+          return { valid: false, error: 'File type not supported' };
         }
       } else {
-        return { valid: false, error: 'Тип файлу не підтримується' };
+        return { valid: false, error: 'File type not supported' };
       }
     }
 
     // Fallback: no validation without API config
     if (!config) {
-      return { valid: false, error: 'Сервіс тимчасово недоступний' };
+      return { valid: false, error: 'Service temporarily unavailable' };
     }
 
     const maxSize = getMaxFileSize('images'); // Use default category for size check
@@ -113,7 +113,7 @@ export function useStorageLimits() {
       const maxSizeMB = Math.round(maxSize / 1024 / 1024);
       return {
         valid: false,
-        error: `Файл занадто великий. Максимальний розмір: ${maxSizeMB}MB`,
+        error: `File too large. Maximum size: ${maxSizeMB}MB`,
       };
     }
 
@@ -121,25 +121,25 @@ export function useStorageLimits() {
   };
 
   const validateFiles = (files: File[]): { valid: boolean; error?: string } => {
-    // Перевірка кількості файлів
+    // Check number of files
     if (files.length > DEFAULT_POLICIES.maxFilesPerMessage) {
       return {
         valid: false,
-        error: `Забагато файлів. Максимально: ${DEFAULT_POLICIES.maxFilesPerMessage}`,
+        error: `Too many files. Maximum: ${DEFAULT_POLICIES.maxFilesPerMessage}`,
       };
     }
 
-    // Перевірка загального розміру
+    // Check total size
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     if (totalSize > DEFAULT_POLICIES.maxTotalSize) {
       const maxTotalMB = Math.round(DEFAULT_POLICIES.maxTotalSize / 1024 / 1024);
       return {
         valid: false,
-        error: `Загальний розмір файлів занадто великий. Максимально: ${maxTotalMB}MB`,
+        error: `Total file size too large. Maximum: ${maxTotalMB}MB`,
       };
     }
 
-    // Перевірка кожного файлу окремо
+    // Check each file individually
     for (const file of files) {
       const validation = validateFile(file);
       if (!validation.valid) {

@@ -1,14 +1,14 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
-// Імпортуємо плагін (важливо: RC версія може вимагати такого імпорту)
+// Import plugin (important: RC version may require this import)
 import reactCompiler from "eslint-plugin-react-compiler";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   
-  // Додаємо конфіг для React Compiler
+  // Add React Compiler config
   {
     plugins: {
       "react-compiler": reactCompiler,

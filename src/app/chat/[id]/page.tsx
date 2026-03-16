@@ -26,7 +26,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
   const resolvedParams = 'then' in params ? use(params) : params;
   const { id } = resolvedParams;
   const router = useRouter();
-  const { user, supabaseUser } = useSupabaseAuth();
+  const { user, supabaseUser, loading: isAuthLoading } = useSupabaseAuth();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
@@ -55,13 +55,102 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showLoader, setShowLoader] = useState(true);
+  const [initialScrollDone, setInitialScrollDone] = useState(false);
+  const [postScrollDelayDone, setPostScrollDelayDone] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const domMessagesReadyRef = useRef(false);
+  const loaderShownAtRef = useRef<number | null>(null);
 
   // Редірект при помилці
   useEffect(() => {
-    if (!isChatLoading && (isError || (!chat && !isMessagesLoading))) {
+    if (!isAuthLoading && !isChatLoading && (isError || (!chat && !isMessagesLoading))) {
       router.replace('/');
     }
-  }, [isChatLoading, chat, isError, router, isMessagesLoading]);
+  }, [isAuthLoading, isChatLoading, chat, isError, router, isMessagesLoading]);
+
+  // Loader handling with real DOM readiness detection
+  useEffect(() => {
+    domMessagesReadyRef.current = false;
+    setShowLoader(true);
+    loaderShownAtRef.current = performance.now();
+    setInitialScrollDone(false);
+    setPostScrollDelayDone(false);
+  }, [id]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const checkDomMessages = () => {
+      const hasMessagesInDom =
+        !!container.querySelector('[id^="message-"]') ||
+        !!container.querySelector('[data-message-row]');
+      const isEmptyChatLoaded = !isMessagesLoading && messages.length === 0;
+
+      if (hasMessagesInDom || isEmptyChatLoaded) {
+        domMessagesReadyRef.current = true;
+        setShowLoader(false);
+      }
+    };
+
+    // Initial check
+    checkDomMessages();
+
+    const observer = new MutationObserver(() => {
+      checkDomMessages();
+    });
+
+    observer.observe(container, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [messages.length, isMessagesLoading]);
+
+  useEffect(() => {
+    const chatReady = !!chat && !isChatLoading && !isAuthLoading;
+    const messagesReady = !isMessagesLoading && (messages.length === 0 || initialScrollDone);
+    const readyToHide =
+      chatReady && messagesReady && domMessagesReadyRef.current && postScrollDelayDone;
+
+    if ((isAuthLoading || isChatLoading || isMessagesLoading) && !domMessagesReadyRef.current) {
+      setShowLoader(true);
+      loaderShownAtRef.current = performance.now();
+    } else if (readyToHide) {
+      const elapsed = loaderShownAtRef.current ? performance.now() - loaderShownAtRef.current : 0;
+      const remaining = Math.max(300 - elapsed, 0);
+      const timer = setTimeout(() => setShowLoader(false), remaining);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    isAuthLoading,
+    isChatLoading,
+    isMessagesLoading,
+    messages.length,
+    initialScrollDone,
+    postScrollDelayDone,
+    chat,
+  ]);
+
+  // Auto-scroll to bottom when messages are loaded (hide under loader first render)
+  useEffect(() => {
+    if (!isMessagesLoading && messages.length > 0) {
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: messages.length - 1,
+          behavior: 'auto',
+          align: 'end',
+        });
+        if (!initialScrollDone) {
+          setInitialScrollDone(true);
+          setTimeout(() => setPostScrollDelayDone(true), 120);
+        }
+      });
+    } else if (!isMessagesLoading && messages.length === 0) {
+      setInitialScrollDone(true);
+      setPostScrollDelayDone(true);
+    }
+  }, [isMessagesLoading, messages.length, initialScrollDone]);
+
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
@@ -87,35 +176,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
     return map;
   }, [messages]);
 
-  if (isChatLoading || (isMessagesLoading && !messages.length)) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 bg-background">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-medium animate-pulse">Завантаження чату...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!chat || isError) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
-        <div className="text-center">
-          <p className="text-lg">Loading chat...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const otherParticipant = chat.participants.find((p: User) => p.id !== user?.id);
+  const otherParticipant = chat?.participants?.find((p: User) => p.id !== user?.id);
   const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
   const isTypingNow = otherParticipant && typingUsers.has(otherParticipant.id);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-64px)] w-full bg-background relative overflow-hidden">
+      {showLoader && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center text-gray-400 bg-background backdrop-blur-md">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium animate-pulse">Завантаження чату...</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
-      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-white/5 flex items-center justify-between backdrop-blur-xl bg-black/40 sticky top-0 z-20">
+      <div
+        className="px-3 sm:px-6 py-3 sm:py-4 border-b border-white/5 flex items-center justify-between backdrop-blur-xl bg-black/40 sticky top-0 z-20 transition-opacity duration-150"
+        style={{ opacity: showLoader ? 0 : 1 }}
+      >
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/10 shadow-lg">
             <Image
@@ -148,7 +227,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 relative min-h-0">
+      <div
+        className="flex-1 relative min-h-0 transition-opacity duration-150"
+        style={{ opacity: showLoader ? 0 : 1 }}
+        ref={messagesContainerRef}
+      >
         {messages.length === 0 && !isMessagesLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
             <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mb-4 border border-white/10 shadow-2xl">

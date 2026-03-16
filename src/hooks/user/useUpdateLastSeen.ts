@@ -7,7 +7,7 @@ import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 
 /**
- * Хук для оновлення статусу "востаннє в мережі".
+ * Hook for updating "last seen" status.
  */
 export function useUpdateLastSeen() {
   const { user } = useSupabaseAuth();
@@ -20,7 +20,7 @@ export function useUpdateLastSeen() {
     onError: (error) => {
       handleError(
         new NetworkError(
-          'Помилка оновлення статусу присутності',
+          'Presence status update error',
           'updateLastSeen',
           'UPDATE_LAST_SEEN_ERROR',
           500,

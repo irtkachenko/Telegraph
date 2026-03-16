@@ -7,7 +7,7 @@ import { handleError } from '@/shared/lib/error-handler';
 let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
-  // Повертаємо існуючий клієнт, якщо він уже створений у браузері
+  // Return existing client if already created in browser
   if (typeof window !== 'undefined' && client) return client;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -16,7 +16,7 @@ export function createClient() {
   const newClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     global: {
       fetch: async (url, options) => {
-        // Перевіряємо, чи ми хочемо вимкнути тост для цього конкретного запиту
+        // Check if we want to disable toast for this specific request
         const skipToast =
           options?.headers &&
           (options.headers as Record<string, string>)['x-skip-toast'] === 'true';

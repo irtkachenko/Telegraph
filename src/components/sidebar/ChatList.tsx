@@ -21,7 +21,7 @@ import { PresenceIndicator } from './PresenceIndicator';
 
 function ChatListBase() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useChats();
-  const { user } = useSupabaseAuth();
+  const { user, loading: isAuthLoading } = useSupabaseAuth();
   const deleteChat = useDeleteChat();
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
@@ -29,6 +29,8 @@ function ChatListBase() {
 
   // Об'єднуємо всі сторінки в один масив
   const chats = data?.pages.flat() || [];
+  const isBootstrapping = isAuthLoading || (!user && !data);
+  const showInitialLoader = isBootstrapping || (isLoading && chats.length === 0);
 
 
   // Debug лог для Virtuoso
@@ -177,7 +179,7 @@ function ChatListBase() {
     return null;
   };
 
-  if (isLoading && chats.length === 0) {
+  if (showInitialLoader) {
     return (
       <>
         <div className="p-8 text-center text-sm text-gray-500 mt-10">Завантаження...</div>
@@ -193,7 +195,7 @@ function ChatListBase() {
     );
   }
 
-  if (!chats.length && !isLoading) {
+  if (!chats.length && !isLoading && !isAuthLoading && user) {
     return (
       <>
         <div className="p-8 text-center text-sm text-gray-500 mt-10">Немає діалогів</div>
@@ -227,15 +229,8 @@ function ChatListBase() {
           className="flex-1 px-2"
           style={{ height: '100%' }}
         />
-      ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="p-8 text-sm text-gray-500 mt-10">
-              {isLoading ? 'Завантаження...' : 'Немає діалогів'}
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
+
 
       <ConfirmationDialog
         open={!!chatToDelete}

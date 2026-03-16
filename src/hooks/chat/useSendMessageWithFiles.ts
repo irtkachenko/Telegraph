@@ -3,12 +3,14 @@
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import imageCompression from 'browser-image-compression';
 import { toast } from 'sonner';
+import { useRef } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { isAllowedFileExtension } from '@/utils/file-validation';
 import { useStorageLimits } from '@/hooks/useDynamicStorageConfig';
 import { messagesApi, storageApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
+import { extractStorageRef, type StorageRef } from '@/lib/storage-utils';
 import type { Attachment, Message } from '@/types';
 
 export interface PendingAttachment {
@@ -25,21 +27,6 @@ interface SendMessageWithFilesParams {
   reply_to_id?: string;
 }
 
-type StorageRef = { bucket: string; path: string };
-
-function extractStorageRef(rawUrl: string): StorageRef | null {
-  if (!rawUrl) return null;
-  const url = rawUrl.split('?')[0] || rawUrl;
-  const supabaseMatch = url.match(
-    /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/,
-  );
-  if (supabaseMatch) {
-    const [, bucket, path] = supabaseMatch;
-    return { bucket, path: decodeURIComponent(path) };
-  }
-  return null;
-}
-
 /**
  * Хук для паралельної відправки повідомлень з файлами
  */
@@ -47,6 +34,36 @@ export function useSendMessageWithFiles(chatId: string) {
   const { user } = useSupabaseAuth();
   const queryClient = useQueryClient();
   const { validateFile } = useStorageLimits();
+  
+  // Простий кеш для запитів повідомлень, щоб уникнути дублікатів
+  const messageFetchCache = useRef<Map<string, Promise<Message>>>(new Map());
+
+  // Функція для отримання повідомлення з кешуванням
+  const getMessageWithCache = async (messageId: string): Promise<Message | null> => {
+    const cached = messageFetchCache.current.get(messageId);
+    if (cached) {
+      try {
+        return await cached;
+      } catch {
+        messageFetchCache.current.delete(messageId);
+      }
+    }
+
+    const promise = messagesApi.getMessage(messageId);
+    messageFetchCache.current.set(messageId, promise);
+
+    try {
+      const message = await promise;
+      // Очищуємо кеш через 5 секунд
+      setTimeout(() => {
+        messageFetchCache.current.delete(messageId);
+      }, 5000);
+      return message;
+    } catch (error) {
+      messageFetchCache.current.delete(messageId);
+      throw error;
+    }
+  };
 
   return useMutation({
     mutationFn: async ({ content, files, reply_to_id }: SendMessageWithFilesParams) => {
@@ -205,9 +222,34 @@ export function useSendMessageWithFiles(chatId: string) {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
-      // Знаходимо батьківське повідомлення для реплаю
+      // Знаходимо батьківське повідомлення для реплаю в кеші
       const allMessages = (previousData as InfiniteData<Message[]>)?.pages?.flat() || [];
-      const parentMessage = reply_to_id ? allMessages.find((m) => m.id === reply_to_id) : null;
+      let parentMessage = reply_to_id ? allMessages.find((m) => m.id === reply_to_id) : null;
+
+      // Якщо повідомлення не знайдено в кеші, робимо запит до API
+      if (reply_to_id && !parentMessage) {
+        try {
+          parentMessage = await getMessageWithCache(reply_to_id);
+        } catch (error) {
+          console.warn('Failed to fetch reply message:', error);
+          // Продовжуємо без даних реплаю, покажемо placeholder
+        }
+      }
+
+      // Створюємо reply_details з доступною інформацією
+      const replyDetails = parentMessage ? {
+        id: parentMessage.id,
+        sender: parentMessage.sender || { name: parentMessage.user?.name },
+        content: parentMessage.content,
+        sender_id: parentMessage.sender_id,
+        attachments: parentMessage.attachments
+      } : reply_to_id ? {
+        id: reply_to_id,
+        sender: { name: null },
+        content: 'Завантаження...',
+        sender_id: null,
+        attachments: null
+      } : null;
 
       // Створюємо оптимістичні attachments
       const optimisticAttachments: Attachment[] = files.map((file) => {
@@ -242,6 +284,7 @@ export function useSendMessageWithFiles(chatId: string) {
         updated_at: null,
         reply_to_id: reply_to_id || null,
         reply_to: parentMessage,
+        reply_details: replyDetails,
         attachments: optimisticAttachments,
         is_optimistic: true,
       } as Message;

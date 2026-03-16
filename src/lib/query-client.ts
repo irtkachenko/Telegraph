@@ -15,7 +15,7 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
-      // Захист від зайвих запитів при помилці авторизації
+      // Protection against extra requests on authorization error
       retry: (failureCount, error: Error & { status?: number }) => {
         if (error?.status === 401) return false;
         return shouldRetry(error) && failureCount < 3;

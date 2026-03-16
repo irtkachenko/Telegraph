@@ -1,8 +1,8 @@
 /**
- * Централізована система обробки помилок - Public API
+ * Centralized error handling system - Public API
  */
 
-// Експортуємо утиліти для обробки помилок
+// Export error handling utilities
 export {
   clearErrorHistory,
   createBoundaryErrorHandler,
@@ -13,7 +13,7 @@ export {
   shouldRetry,
   withErrorHandling,
 } from './error-handler';
-// Експортуємо всі класи помилок
+// Export all error classes
 export {
   AppError,
   AuthError,
@@ -29,7 +29,7 @@ export {
   ValidationError,
 } from './errors';
 
-// Типи для TypeScript
+// TypeScript types
 export interface ErrorLogConfig {
   enableConsoleLog: boolean;
   enableToast: boolean;

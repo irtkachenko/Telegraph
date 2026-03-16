@@ -15,15 +15,15 @@ export async function createMiddlewareClient(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        // Оновлюємо куки в запиті (для поточної роботи сервера)
+        // Update cookies in request (for current server work)
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 
-        // Перестворюємо відповідь з оновленим запитом
+        // Recreate response with updated request
         supabaseResponse = NextResponse.next({
           request,
         });
 
-        // Оновлюємо куки у відповіді (щоб вони полетіли в браузер)
+        // Update cookies in response (so they go to browser)
         cookiesToSet.forEach(({ name, value, options }) =>
           supabaseResponse.cookies.set(name, value, options),
         );

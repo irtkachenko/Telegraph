@@ -13,7 +13,7 @@ interface SignedUrlOptions {
 
 export const storageApi = {
   /**
-   * Отримання публічного URL
+   * Get public URL
    */
   getPublicUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
     try {
@@ -35,7 +35,7 @@ export const storageApi = {
   },
 
   /**
-   * Отримання signed URL для приватних файлів
+   * Get signed URL for private files
    */
   getSignedUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
     const { data, error: signedUrlError } = await supabase.storage
@@ -60,7 +60,7 @@ export const storageApi = {
   },
 
   /**
-   * Автоматичне визначення типу URL (публічний або signed)
+   * Auto-detect URL type (public or signed)
    */
   getUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
     try {
@@ -108,7 +108,7 @@ export const storageApi = {
   },
 
   /**
-   * Завантаження файлу
+   * Upload file
    */
   uploadFile: async (
     bucket: string,
@@ -137,7 +137,7 @@ export const storageApi = {
   },
 
   /**
-   * Завантаження attachment з оптимістичним оновленням
+   * Upload attachment with optimistic update
    */
   uploadAttachment: async (file: File, chatId: string, userId: string) => {
     const fileExt = file.name.split('.').pop();
@@ -146,13 +146,13 @@ export const storageApi = {
     const fileName = `${timestamp}-${randomSuffix}.${fileExt}`;
     const filePath = `${chatId}/${userId}/${fileName}`;
 
-    // Завантажуємо файл з upsert: true для обробки дублікатів
+    // Upload file with upsert: true to handle duplicates
     await storageApi.uploadFile('attachments', filePath, file, {
       cacheControl: '3600',
       upsert: true,
     });
 
-    // Отримуємо signed URL для приватного bucket
+    // Get signed URL for private bucket
     const signedUrl = await storageApi.getSignedUrl('attachments', filePath);
 
     const attachment: Attachment = {
@@ -174,7 +174,7 @@ export const storageApi = {
   },
 
   /**
-   * Отримання динамічної конфігурації storage
+   * Get dynamic storage configuration
    */
   getStorageConfig: async (): Promise<StorageConfigResponse> => {
     const response = await fetch('/api/storage/config');

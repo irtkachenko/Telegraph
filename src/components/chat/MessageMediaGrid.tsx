@@ -6,6 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { storageConfig, getUrlExpiryBuffer, getUrlCheckInterval } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
+import { extractStorageRef } from '@/lib/storage-utils';
 import type { Attachment } from '@/types';
 
 const ImageModal = lazy(() => import('./ImageModal'));
@@ -21,33 +22,6 @@ interface AttachmentWithUrl extends Attachment {
 interface CachedUrl {
   url: string;
   expiresAt: number;
-}
-
-type StorageRef = { bucket: string; path: string };
-
-function extractStorageRef(rawUrl: string): StorageRef | null {
-  if (!rawUrl) return null;
-
-  // Normalize URL (strip query params for parsing)
-  const url = rawUrl.split('?')[0] || rawUrl;
-
-  // Match Supabase storage URLs (public or signed)
-  const supabaseMatch = url.match(
-    /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/]+)\/(.+)/,
-  );
-  if (supabaseMatch) {
-    const [, bucket, path] = supabaseMatch;
-    return { bucket, path: decodeURIComponent(path) };
-  }
-
-  // Match bucket/path style (e.g., attachments/<path>)
-  const bucketName = storageConfig.bucketNames.attachments;
-  const normalized = url.startsWith('/') ? url.slice(1) : url;
-  if (normalized.startsWith(`${bucketName}/`)) {
-    return { bucket: bucketName, path: normalized.slice(bucketName.length + 1) };
-  }
-
-  return null;
 }
 
 interface MediaItemState {

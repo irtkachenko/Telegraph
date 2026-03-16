@@ -19,11 +19,15 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'lh3.googleusercontent.com', // Одразу додаємо для Google Auth аватарів
+        hostname: 'lh3.googleusercontent.com', // Add for Google Auth avatars
         port: '',
         pathname: '/**',
       },
     ],
+  },
+  turbopack: {},
+  webpack: (config: any) => {
+    return config;
   },
 };
 export default nextConfig;

@@ -5,7 +5,7 @@ import type { FullChat } from '@/types';
 
 export const chatsApi = {
   /**
-   * РћС‚СЂРёРјР°РЅРЅСЏ СЃРїРёСЃРєСѓ С‡Р°С‚С–РІ РїРѕС‚РѕС‡РЅРѕРіРѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° Р· РїР°РіС–РЅР°С†С–С”СЋ
+   * Get chat list for current user with pagination
    */
   getChats: async (userId: string, page = 1, limit = 20) => {
     const offset = (page - 1) * limit;
@@ -46,14 +46,14 @@ export const chatsApi = {
   },
 
   /**
-   * РћС‚СЂРёРјР°РЅРЅСЏ С‡Р°С‚С–РІ РґР»СЏ infinite query
+   * Get chats for infinite query
    */
   getChatsInfinite: async (userId: string, pageParam = 1, limit = 20) => {
     return chatsApi.getChats(userId, pageParam, limit);
   },
 
   /**
-   * РЎС‚РІРѕСЂРµРЅРЅСЏ РЅРѕРІРѕРіРѕ С‡Р°С‚Сѓ
+   * Create new chat
    */
   createChat: async (payload: { user_id: string; recipient_id: string }) => {
     const { data, error } = await supabase
@@ -71,7 +71,7 @@ export const chatsApi = {
   },
 
   /**
-   * Р’РёРґР°Р»РµРЅРЅСЏ С‡Р°С‚Сѓ
+   * Delete chat
    */
   deleteChat: async (chatId: string) => {
     const { error } = await supabase.from('chats').delete().eq('id', chatId);
@@ -80,7 +80,7 @@ export const chatsApi = {
   },
 
   /**
-   * РћРЅРѕРІР»РµРЅРЅСЏ С‡Р°С‚Сѓ
+   * Update chat
    */
   updateChat: async (
     chatId: string,

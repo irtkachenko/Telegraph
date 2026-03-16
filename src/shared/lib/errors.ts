@@ -1,8 +1,8 @@
 /**
- * Централізована система обробки помилок
+ * Centralized error handling system
  */
 
-// Базовий клас для всіх помилок додатку
+// Base class for all application errors
 export class AppError extends Error {
   constructor(
     message: string,
@@ -13,16 +13,16 @@ export class AppError extends Error {
     super(message);
     this.name = this.constructor.name;
 
-    // Відновлюємо прототип для instanceof перевірки
+    // Restore prototype for instanceof check
     Object.setPrototypeOf(this, new.target.prototype);
 
-    // Додаємо стек для дебагінгу
+    // Add stack for debugging
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
   }
 
-  // Перетворення на JSON для логування
+  // Convert to JSON for logging
   toJSON() {
     return {
       name: this.name,
@@ -34,27 +34,27 @@ export class AppError extends Error {
     };
   }
 
-  // Перевірка чи це критична помилка
+  // Check if this is a critical error
   get isCritical(): boolean {
     return !this.isOperational;
   }
 }
 
-// Помилки авторизації
+// Authorization errors
 export class AuthError extends AppError {
   constructor(message: string, code = 'AUTH_ERROR', status = 401) {
     super(message, code, status);
   }
 }
 
-// Помилки доступу (403)
+// Access errors (403)
 export class PermissionError extends AppError {
   constructor(message: string, code = 'PERMISSION_DENIED', status = 403) {
     super(message, code, status);
   }
 }
 
-// Помилки валідації
+// Validation errors
 export class ValidationError extends AppError {
   constructor(
     message: string,
@@ -73,7 +73,7 @@ export class ValidationError extends AppError {
   }
 }
 
-// Мережеві помилки
+// Network errors
 export class NetworkError extends AppError {
   constructor(
     message: string,
@@ -92,7 +92,7 @@ export class NetworkError extends AppError {
   }
 }
 
-// Помилки не знайдено
+// Not found errors
 export class NotFoundError extends AppError {
   constructor(message: string, resource?: string, code = 'NOT_FOUND', status = 404) {
     super(message, code, status);
@@ -109,14 +109,14 @@ export class NotFoundError extends AppError {
   }
 }
 
-// Помилки конфігурації
+// Configuration errors
 export class ConfigError extends AppError {
   constructor(message: string, code = 'CONFIG_ERROR') {
     super(message, code, 500);
   }
 }
 
-// Помилки бази даних
+// Database errors
 export class DatabaseError extends AppError {
   constructor(
     message: string,
@@ -135,7 +135,7 @@ export class DatabaseError extends AppError {
   }
 }
 
-// Фабрика для створення помилок з HTTP статусу
+// Factory for creating errors from HTTP status
 export function createErrorFromStatus(status: number, message: string, code?: string): AppError {
   switch (status) {
     case 400:
@@ -156,12 +156,12 @@ export function createErrorFromStatus(status: number, message: string, code?: st
   }
 }
 
-// Перевірка чи це відома помилка
+// Check if this is a known error
 export function isAppError(error: unknown): error is AppError {
   return error instanceof AppError;
 }
 
-// Безпечне отримання повідомлення помилки
+// Safe error message extraction
 export function getErrorMessage(error: unknown): string {
   if (isAppError(error)) {
     return error.message;
@@ -172,7 +172,7 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-// Перевірка чи це операційна помилка (не критична)
+// Check if this is an operational error (non-critical)
 export function isOperationalError(error: unknown): boolean {
   return isAppError(error) && error.isOperational;
 }

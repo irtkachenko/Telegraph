@@ -12,7 +12,7 @@ export function useStorageConfig() {
       const data = await response.json();
       return data;
     },
-    staleTime: 1000 * 60 * 30, // Кеш на 30 хв
+    staleTime: 1000 * 60 * 30, // Cache for 30 min
     refetchOnWindowFocus: false,
     retry: 2,
   });
