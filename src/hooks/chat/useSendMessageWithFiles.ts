@@ -1,16 +1,15 @@
-'use client';
+﻿'use client';
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import imageCompression from 'browser-image-compression';
-import { toast } from 'sonner';
 import { useRef } from 'react';
+import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { isAllowedFileExtension } from '@/utils/file-validation';
 import { useStorageLimits } from '@/hooks/useDynamicStorageConfig';
+import { extractStorageRef, type StorageRef } from '@/lib/storage-utils';
 import { messagesApi, storageApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
-import { extractStorageRef, type StorageRef } from '@/lib/storage-utils';
 import type { Attachment, Message } from '@/types';
 
 export interface PendingAttachment {
@@ -25,6 +24,7 @@ interface SendMessageWithFilesParams {
   content: string;
   files: File[];
   reply_to_id?: string;
+  client_id?: string;
 }
 
 /**
@@ -34,7 +34,7 @@ export function useSendMessageWithFiles(chatId: string) {
   const { user } = useSupabaseAuth();
   const queryClient = useQueryClient();
   const { validateFile } = useStorageLimits();
-  
+
   // Простий кеш для запитів повідомлень, щоб уникнути дублікатів
   const messageFetchCache = useRef<Map<string, Promise<Message>>>(new Map());
 
@@ -66,7 +66,7 @@ export function useSendMessageWithFiles(chatId: string) {
   };
 
   return useMutation({
-    mutationFn: async ({ content, files, reply_to_id }: SendMessageWithFilesParams) => {
+    mutationFn: async ({ content, files, reply_to_id, client_id }: SendMessageWithFilesParams) => {
       if (!user) throw new AuthError('Ви не авторизовані', 'SEND_MESSAGE_AUTH_REQUIRED', 401);
 
       // Перевірка чи є що відправляти
@@ -151,11 +151,13 @@ export function useSendMessageWithFiles(chatId: string) {
       }
 
       // Відправляємо повідомлення тільки з успішно завантаженими файлами
+      const clientId = client_id ?? crypto.randomUUID();
       const messagePayload = {
         sender_id: user.id,
         content: content.trim(),
         reply_to_id: reply_to_id || undefined,
-        attachments: successfulUploads, // Тільки реальні завантажені файли
+        attachments: successfulUploads,
+        client_id: clientId, // Тільки реальні завантажені файли
       };
 
       let savedMessage: Message;
@@ -215,10 +217,11 @@ export function useSendMessageWithFiles(chatId: string) {
         message: savedMessage,
         uploadedFiles: successfulUploads,
         failedFiles: failedUploads,
+        clientId,
       };
     },
 
-    onMutate: async ({ content, files, reply_to_id }) => {
+    onMutate: async ({ content, files, reply_to_id, client_id }) => {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });
       const previousData = queryClient.getQueryData(['messages', chatId]);
 
@@ -237,19 +240,23 @@ export function useSendMessageWithFiles(chatId: string) {
       }
 
       // Створюємо reply_details з доступною інформацією
-      const replyDetails = parentMessage ? {
-        id: parentMessage.id,
-        sender: parentMessage.sender || { name: parentMessage.user?.name },
-        content: parentMessage.content,
-        sender_id: parentMessage.sender_id,
-        attachments: parentMessage.attachments
-      } : reply_to_id ? {
-        id: reply_to_id,
-        sender: { name: null },
-        content: 'Завантаження...',
-        sender_id: null,
-        attachments: null
-      } : null;
+      const replyDetails = parentMessage
+        ? {
+            id: parentMessage.id,
+            sender: parentMessage.sender || { name: parentMessage.user?.name },
+            content: parentMessage.content,
+            sender_id: parentMessage.sender_id,
+            attachments: parentMessage.attachments,
+          }
+        : reply_to_id
+          ? {
+              id: reply_to_id,
+              sender: { name: null },
+              content: 'Завантаження...',
+              sender_id: null,
+              attachments: null,
+            }
+          : null;
 
       // Створюємо оптимістичні attachments
       const optimisticAttachments: Attachment[] = files.map((file) => {
@@ -274,7 +281,7 @@ export function useSendMessageWithFiles(chatId: string) {
           uploading: true,
         } as Attachment;
       });
-
+      const clientId = client_id ?? crypto.randomUUID();
       const optimisticMessage: Message = {
         id: `temp-${Date.now()}`,
         content,
@@ -282,6 +289,7 @@ export function useSendMessageWithFiles(chatId: string) {
         chat_id: chatId,
         created_at: new Date().toISOString(),
         updated_at: null,
+        client_id: clientId,
         reply_to_id: reply_to_id || null,
         reply_to: parentMessage,
         reply_details: replyDetails,
@@ -296,7 +304,7 @@ export function useSendMessageWithFiles(chatId: string) {
         return { ...old, pages: newPages };
       });
 
-      return { previousData, optimisticAttachments };
+      return { previousData, optimisticAttachments, clientId };
     },
 
     onError: (error: Error & { status?: number }, variables, context) => {
@@ -317,7 +325,7 @@ export function useSendMessageWithFiles(chatId: string) {
     },
 
     onSuccess: (result, variables, context) => {
-      const { message, uploadedFiles, failedFiles } = result;
+      const { message, uploadedFiles, failedFiles, clientId } = result;
 
       queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;
@@ -327,9 +335,18 @@ export function useSendMessageWithFiles(chatId: string) {
           pages: old.pages.map((page) =>
             page.map((msg) => {
               // Замінюємо оптимістичне повідомлення на реальне
-              if (msg.id.toString().startsWith('temp-') && msg.content === message.content) {
-                // Використовуємо тільки реальні attachments з повідомлення
-                return message;
+              if (
+                msg.id.toString().startsWith('temp-') &&
+                (msg.client_id === clientId || msg.client_id === message.client_id)
+              ) {
+                // Зберігаємо reply-контекст з оптимістичного повідомлення,
+                // якщо сервер ще не повернув повні reply-дані
+                return {
+                  ...message,
+                  reply_to_id: message.reply_to_id ?? msg.reply_to_id,
+                  reply_to: message.reply_to ?? msg.reply_to,
+                  reply_details: message.reply_details ?? msg.reply_details,
+                };
               }
               return msg;
             }),
@@ -375,7 +392,9 @@ async function uploadFileOptimized(
           useWebWorker: true,
         });
       } catch (e) {
+      if (process.env.NODE_ENV === 'development') {
         console.warn('Стиснення не вдалося, вантажимо оригінал', e);
+      }
       }
     }
 
@@ -395,3 +414,4 @@ async function uploadFileOptimized(
     );
   }
 }
+

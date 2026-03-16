@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -13,8 +13,8 @@ interface PresenceState {
 }
 
 /**
- * Хук для подій чату (typing indicator) через Presence.
- * Підписка на повідомлення тепер відбувається глобально в useChatsRealtime.
+ * РҐСѓРє РґР»СЏ РїРѕРґС–Р№ С‡Р°С‚Сѓ (typing indicator) С‡РµСЂРµР· Presence.
+ * РџС–РґРїРёСЃРєР° РЅР° РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ С‚РµРїРµСЂ РІС–РґР±СѓРІР°С”С‚СЊСЃСЏ РіР»РѕР±Р°Р»СЊРЅРѕ РІ useChatsRealtime.
  */
 export function useChatEvents(chatId: string, user: User | null) {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -53,7 +53,7 @@ export function useChatEvents(chatId: string, user: User | null) {
   useEffect(() => {
     if (!chatId || !user?.id) return;
 
-    // Створюємо канал для присутності в конкретному чаті
+    // РЎС‚РІРѕСЂСЋС”РјРѕ РєР°РЅР°Р» РґР»СЏ РїСЂРёСЃСѓС‚РЅРѕСЃС‚С– РІ РєРѕРЅРєСЂРµС‚РЅРѕРјСѓ С‡Р°С‚С–
     const channel = realtimeApi.createChatChannel(chatId);
     channelRef.current = channel;
 
@@ -71,7 +71,9 @@ export function useChatEvents(chatId: string, user: User | null) {
         try {
           realtimeApi.unsubscribe(channel);
         } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
           console.warn('Error during chat events cleanup:', error);
+        }
         }
       }
       channelRef.current = null;
@@ -79,27 +81,25 @@ export function useChatEvents(chatId: string, user: User | null) {
     };
   }, [chatId, handlePresenceSync]);
 
-  const setTyping = useCallback(
-    (typing: boolean) => {
-      if (!channelRef.current) return;
+  const setTyping = useCallback((typing: boolean) => {
+    if (!channelRef.current) return;
 
-      const now = Date.now();
-      // Throttle: відправляємо статус кожні 2.5 секунди
-      if (typing && now - lastSentRef.current < 2500) return;
+    const now = Date.now();
+    // Throttle: РІС–РґРїСЂР°РІР»СЏС”РјРѕ СЃС‚Р°С‚СѓСЃ РєРѕР¶РЅС– 2.5 СЃРµРєСѓРЅРґРё
+    if (typing && now - lastSentRef.current < 2500) return;
 
-      channelRef.current.track({ user_id: userIdRef.current, isTyping: typing });
-      if (typing) lastSentRef.current = now;
+    channelRef.current.track({ user_id: userIdRef.current, isTyping: typing });
+    if (typing) lastSentRef.current = now;
 
-      // Автоматичне вимкнення статусу через 3 секунди бездіяльності
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      if (typing) {
-        timeoutRef.current = setTimeout(() => {
-          channelRef.current?.track({ user_id: userIdRef.current, isTyping: false });
-        }, 3000);
-      }
-    },
-    [],
-  );
+    // РђРІС‚РѕРјР°С‚РёС‡РЅРµ РІРёРјРєРЅРµРЅРЅСЏ СЃС‚Р°С‚СѓСЃСѓ С‡РµСЂРµР· 3 СЃРµРєСѓРЅРґРё Р±РµР·РґС–СЏР»СЊРЅРѕСЃС‚С–
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (typing) {
+      timeoutRef.current = setTimeout(() => {
+        channelRef.current?.track({ user_id: userIdRef.current, isTyping: false });
+      }, 3000);
+    }
+  }, []);
 
   return { typingUsers, setTyping };
 }
+

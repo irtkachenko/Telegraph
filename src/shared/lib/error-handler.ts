@@ -183,7 +183,7 @@ async function logErrorRemotely(error: AppError, context?: string) {
 /**
  * Wrapper for async functions to automatically handle errors.
  */
-export function withErrorHandling<T extends any[], R>(
+export function withErrorHandling<T extends unknown[], R>(
   fn: (...args: T) => Promise<R>,
   context?: string,
 ) {

@@ -1,10 +1,11 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { use, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import ChatInput from '@/components/chat/ChatInput';
@@ -21,10 +22,14 @@ import { usePresence } from '@/hooks/user';
 import { formatRelativeTime } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
 
-export default function ChatPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
-  // Handle both Promise and object formats for Next.js compatibility
-  const resolvedParams = 'then' in params ? use(params) : params;
-  const { id } = resolvedParams;
+export default function ChatPage() {
+  const params = useParams();
+  const id =
+    params.id && typeof params.id === 'string'
+      ? params.id
+      : Array.isArray(params.id)
+        ? params.id[0]
+        : '';
   const router = useRouter();
   const { user, supabaseUser, loading: isAuthLoading } = useSupabaseAuth();
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -150,7 +155,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
       setPostScrollDelayDone(true);
     }
   }, [isMessagesLoading, messages.length, initialScrollDone]);
-
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
@@ -323,7 +327,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
                 try {
                   if (messages.length > 0) {
                     const lastIndex = Math.max(0, messages.length - 1);
-                    console.log('📍 Scrolling to index:', lastIndex, 'of', messages.length);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log('📍 Scrolling to index:', lastIndex, 'of', messages.length);
+                    }
 
                     virtuosoRef.current?.scrollToIndex({
                       index: lastIndex,
@@ -332,7 +338,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> |
                     });
                   }
                 } catch (error) {
-                  console.error('❌ Virtuoso scroll error:', error);
+                  if (process.env.NODE_ENV === 'development') {
+                    console.error('❌ Virtuoso scroll error:', error);
+                  }
                   // Fallback: простий scroll до кінця через DOM query
                   const container = document.querySelector('.no-scrollbar');
                   if (container) {

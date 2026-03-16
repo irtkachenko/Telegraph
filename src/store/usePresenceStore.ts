@@ -1,17 +1,18 @@
 'use client';
+/* eslint-disable react-compiler/react-compiler */
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef } from 'react';
 import { create } from 'zustand';
+import {
+  getHeartbeatInterval,
+  getInactivityTimeout,
+  getMaxReconnectAttempts,
+  getPresenceDebounceDelay,
+  getReconnectDelay,
+} from '@/config/presence.config';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
-import { 
-  getMaxReconnectAttempts, 
-  getReconnectDelay, 
-  getHeartbeatInterval, 
-  getPresenceDebounceDelay, 
-  getInactivityTimeout 
-} from '@/config/presence.config';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -58,7 +59,9 @@ async function updateLastSeen(): Promise<void> {
   try {
     const { error } = await supabase.rpc('update_last_seen');
     if (error) {
-      console.warn('Failed to update last seen:', error.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Failed to update last seen:', error.message);
+      }
     }
   } catch {
     // Silently fail — this is best-effort
@@ -77,19 +80,21 @@ function handleBeforeUnload(): void {
 
 function updateActivity(manager: PresenceManager): void {
   manager.lastActivity = Date.now();
-  
+
   // Clear existing cleanup timeout
   if (manager.cleanupTimeout) {
     clearTimeout(manager.cleanupTimeout);
   }
-  
+
   // Set new cleanup timeout
   manager.cleanupTimeout = setTimeout(() => {
     // Check if manager is still inactive and has no subscribers
-    if (globalManager && 
-        globalManager.userId === manager.userId &&
-        globalManager.subscribers <= 0 &&
-        Date.now() - globalManager.lastActivity >= INACTIVITY_TIMEOUT) {
+    if (
+      globalManager &&
+      globalManager.userId === manager.userId &&
+      globalManager.subscribers <= 0 &&
+      Date.now() - globalManager.lastActivity >= INACTIVITY_TIMEOUT
+    ) {
       cleanupPresence();
     }
   }, INACTIVITY_TIMEOUT);

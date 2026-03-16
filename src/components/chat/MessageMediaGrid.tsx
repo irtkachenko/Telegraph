@@ -3,10 +3,10 @@
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { storageConfig, getUrlExpiryBuffer, getUrlCheckInterval } from '@/config/storage.config';
+import { getUrlCheckInterval, getUrlExpiryBuffer, storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
-import { cn } from '@/lib/utils';
 import { extractStorageRef } from '@/lib/storage-utils';
+import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
 
 const ImageModal = lazy(() => import('./ImageModal'));
@@ -30,7 +30,13 @@ interface MediaItemState {
   isLoaded: boolean;
 }
 
-const MediaPlaceholder = ({ reason = 'deleted', isLoading = false }: { reason?: 'deleted' | 'error'; isLoading?: boolean }) => {
+const MediaPlaceholder = ({
+  reason = 'deleted',
+  isLoading = false,
+}: {
+  reason?: 'deleted' | 'error';
+  isLoading?: boolean;
+}) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center w-full h-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center min-h-[150px]">
@@ -41,21 +47,24 @@ const MediaPlaceholder = ({ reason = 'deleted', isLoading = false }: { reason?: 
       </div>
     );
   }
-  
+
   const Icon = reason === 'deleted' ? FileX : ImageOff;
   const text = reason === 'deleted' ? 'Deleted' : 'Error';
-  
+
+  if (!hasItems) {
+    return <div className="hidden" />;
+  }
+
   return (
     <div className="flex flex-col items-center justify-center w-full h-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center min-h-[150px]">
       <Icon className="w-5 h-5 text-neutral-500 mb-2" />
-      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-        {text}
-      </p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{text}</p>
     </div>
   );
 };
 
 export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
+  const hasItems = !!items && items.length > 0;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
   const [processedUrls, setProcessedUrls] = useState<Map<string, CachedUrl>>(new Map());
@@ -72,38 +81,41 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     const intervalMs = getUrlCheckInterval() * 1000;
     if (intervalMs <= 0) return;
 
-    const id = setInterval(() => setRefreshTick((prev) => prev + 1), intervalMs);
+    const id = setInterval(() => setRefreshTick(Date.now()), intervalMs);
     return () => clearInterval(id);
   }, []);
 
   // Initialize media states when items change
   useEffect(() => {
     if (!items || items.length === 0) return;
-    
+
     const newStates = new Map<string, MediaItemState>();
     items.forEach((item) => {
       const key = `${item.id}:${item.url}`;
       const existing = mediaStates.get(key);
       if (!existing) {
         // Start with loading state only for items that need URL resolution
-        const needsUrlResolution = !item.url.startsWith('blob:') && extractStorageRef(item.url) !== null;
-        newStates.set(key, { 
-          isLoading: needsUrlResolution, 
-          hasError: false, 
-          isLoaded: !needsUrlResolution 
+        const needsUrlResolution =
+          !item.url.startsWith('blob:') && extractStorageRef(item.url) !== null;
+        newStates.set(key, {
+          isLoading: needsUrlResolution,
+          hasError: false,
+          isLoaded: !needsUrlResolution,
         });
       } else {
         newStates.set(key, existing);
       }
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMediaStates(newStates);
-  }, [items?.length, items?.map(item => `${item.id}:${item.url}`).join(',')]);
+  }, [items?.length, items?.map((item) => `${item.id}:${item.url}`).join(',')]);
 
   // Prune caches when items change
   useEffect(() => {
     if (!items || items.length === 0) return;
     const keys = new Set(items.map((item) => `${item.id}:${item.url}`));
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProcessedUrls((prev) => {
       let changed = false;
       const next = new Map<string, CachedUrl>();
@@ -128,7 +140,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     failedCacheRef.current.forEach((_value, key) => {
       if (!keys.has(key)) failedCacheRef.current.delete(key);
     });
-  }, [items?.length, items?.map(item => `${item.id}:${item.url}`).join(',')]); // Memoize by content
+  }, [items?.length, items?.map((item) => `${item.id}:${item.url}`).join(',')]); // Memoize by content
 
   // Resolve and refresh signed URLs with per-item debouncing
   useEffect(() => {
@@ -171,7 +183,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       // Set new timeout for this specific item
       const timeoutId = setTimeout(() => {
         itemTimeoutsRef.current.delete(cacheKey);
-        
+
         pendingRef.current.add(cacheKey);
         processingRef.current.add(cacheKey);
 
@@ -231,8 +243,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     if (!items || items.length === 0) {
       return [];
     }
-
-    const now = Date.now();
+    const now = refreshTick;
 
     return items.map((item) => {
       const cacheKey = `${item.id}:${item.url}`;
@@ -245,10 +256,6 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       return { ...item, processedUrl: item.url };
     });
   }, [items, processedUrls, refreshTick]);
-
-  if (!items || items.length === 0) {
-    return <div className="hidden" />;
-  }
 
   const handleImageError = useCallback((url: string) => {
     setFailedUrls((prev) => new Set(prev).add(url));
@@ -290,114 +297,136 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     });
   }, []);
 
-  const activeMedia = useMemo(() => 
-    processedItems.filter(
-      (item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url),
-    ), [processedItems, failedUrls]
+  const activeMedia = useMemo(
+    () =>
+      processedItems.filter(
+        (item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url),
+      ),
+    [processedItems, failedUrls],
   );
   const count = processedItems.length;
   const activeCount = activeMedia.length;
 
-  const handleMediaClick = useCallback((index: number) => {
-    const clickedItem = processedItems[index];
-    
-    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url)) {
-      return;
-    }
-    
-    const activeIndex = activeMedia.findIndex((m) => m.id === clickedItem.id);
-    
-    if (activeIndex !== -1) {
-      setSelectedIndex(activeIndex);
-    }
-  }, [processedItems, failedUrls, activeMedia]);
+  const handleMediaClick = useCallback(
+    (index: number) => {
+      const clickedItem = processedItems[index];
 
-  const modalImages = useMemo(() => 
-    activeMedia
-      .filter((item) => item.type === 'image' || item.type === 'video')
-      .map((item) => ({ ...item, url: item.processedUrl || item.url })),
-    [activeMedia]
+      if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url)) {
+        return;
+      }
+
+      const activeIndex = activeMedia.findIndex((m) => m.id === clickedItem.id);
+
+      if (activeIndex !== -1) {
+        setSelectedIndex(activeIndex);
+      }
+    },
+    [processedItems, failedUrls, activeMedia],
   );
 
-  const renderItem = useCallback((item: AttachmentWithUrl, index: number, layoutClass: string) => {
-    const itemUrl = item.processedUrl || item.url;
-    const cacheKey = `${item.id}:${item.url}`;
-    const mediaState = mediaStates.get(cacheKey) || { isLoading: false, hasError: false, isLoaded: false };
-    const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
-    
-    // Show placeholder only if loading or if there's an error after attempting to load
-    const shouldShowPlaceholder = mediaState.isLoading || (isFailed && mediaState.isLoaded);
-    
-    // Show actual content if not loading and no error, or if it's a blob URL (already loaded)
-    const shouldShowContent = !mediaState.isLoading && !isFailed && (mediaState.isLoaded || itemUrl.startsWith('blob:'));
+  const modalImages = useMemo(
+    () =>
+      activeMedia
+        .filter((item) => item.type === 'image' || item.type === 'video')
+        .map((item) => ({ ...item, url: item.processedUrl || item.url })),
+    [activeMedia],
+  );
 
-    return (
-      <div
-        key={item.id}
-        className={cn(
-          'relative overflow-hidden group bg-neutral-200 dark:bg-neutral-800',
-          layoutClass
-        )}
-      >
-        {shouldShowPlaceholder && (
-          <MediaPlaceholder reason={isFailed ? 'error' : 'deleted'} isLoading={mediaState.isLoading} />
-        )}
-        {shouldShowContent && (
-          <button
-            type="button"
-            className="w-full h-full relative block"
-            onClick={() => handleMediaClick(index)}
-          >
-            {item.type === 'video' ? (
-              <div className="w-full h-full relative bg-black">
-                <video 
-                  src={itemUrl} 
-                  className="w-full h-full object-cover text-white"
-                  onLoadedData={() => handleImageLoad(itemUrl)}
-                  onError={() => handleImageError(itemUrl)}
-                >
-                  <track kind="captions" />
-                </video>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-                  <PlayCircle className="w-10 h-10 text-white/80" />
+  const renderItem = useCallback(
+    (item: AttachmentWithUrl, index: number, layoutClass: string) => {
+      const itemUrl = item.processedUrl || item.url;
+      const cacheKey = `${item.id}:${item.url}`;
+      const mediaState = mediaStates.get(cacheKey) || {
+        isLoading: false,
+        hasError: false,
+        isLoaded: false,
+      };
+      const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
+
+      // Show placeholder only if loading or if there's an error after attempting to load
+      const shouldShowPlaceholder = mediaState.isLoading || (isFailed && mediaState.isLoaded);
+
+      // Show actual content if not loading and no error, or if it's a blob URL (already loaded)
+      const shouldShowContent =
+        !mediaState.isLoading && !isFailed && (mediaState.isLoaded || itemUrl.startsWith('blob:'));
+
+      return (
+        <div
+          key={item.id}
+          className={cn(
+            'relative overflow-hidden group bg-neutral-200 dark:bg-neutral-800',
+            layoutClass,
+          )}
+        >
+          {shouldShowPlaceholder && (
+            <MediaPlaceholder
+              reason={isFailed ? 'error' : 'deleted'}
+              isLoading={mediaState.isLoading}
+            />
+          )}
+          {shouldShowContent && (
+            <button
+              type="button"
+              className="w-full h-full relative block"
+              onClick={() => handleMediaClick(index)}
+            >
+              {item.type === 'video' ? (
+                <div className="w-full h-full relative bg-black">
+                  <video
+                    src={itemUrl}
+                    className="w-full h-full object-cover text-white"
+                    onLoadedData={() => handleImageLoad(itemUrl)}
+                    onError={() => handleImageError(itemUrl)}
+                  >
+                    <track kind="captions" />
+                  </video>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                    <PlayCircle className="w-10 h-10 text-white/80" />
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <Image
-                src={itemUrl}
-                alt=""
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                unoptimized
-                onLoadStart={() => handleImageLoadStart(itemUrl)}
-                onLoad={() => handleImageLoad(itemUrl)}
-                onError={() => handleImageError(itemUrl)}
-                sizes="(max-width: 768px) 280px, 400px"
-              />
-            )}
-            {index === 3 && activeCount > 4 && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white z-10">
-                <span className="text-xl font-bold">+{activeCount - 4}</span>
-              </div>
-            )}
-          </button>
-        )}
-      </div>
-    );
-  }, [failedUrls, handleMediaClick, handleImageLoad, handleImageError, handleImageLoadStart, activeCount, mediaStates]);
+              ) : (
+                <Image
+                  src={itemUrl}
+                  alt=""
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  unoptimized
+                  onLoadStart={() => handleImageLoadStart(itemUrl)}
+                  onLoad={() => handleImageLoad(itemUrl)}
+                  onError={() => handleImageError(itemUrl)}
+                  sizes="(max-width: 768px) 280px, 400px"
+                />
+              )}
+              {index === 3 && activeCount > 4 && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white z-10">
+                  <span className="text-xl font-bold">+{activeCount - 4}</span>
+                </div>
+              )}
+            </button>
+          )}
+        </div>
+      );
+    },
+    [
+      failedUrls,
+      handleMediaClick,
+      handleImageLoad,
+      handleImageError,
+      handleImageLoadStart,
+      activeCount,
+      mediaStates,
+    ],
+  );
 
   return (
     <>
       <div
-        className={cn(
-          'grid gap-1 overflow-hidden rounded-2xl w-full',
-          {
-            'w-[400px] max-w-full max-sm:w-[280px]': activeCount === 1,
-            'w-[350px] max-w-full max-sm:w-[250px]': activeCount === 2,
-            'w-[320px] max-w-full max-sm:w-[220px]': activeCount === 3,
-            'w-[300px] max-w-full max-sm:w-[200px]': activeCount >= 4,
-          }
-        )}
+        className={cn('grid gap-1 overflow-hidden rounded-2xl w-full', {
+          'w-[400px] max-w-full max-sm:w-[280px]': activeCount === 1,
+          'w-[350px] max-w-full max-sm:w-[250px]': activeCount === 2,
+          'w-[320px] max-w-full max-sm:w-[220px]': activeCount === 3,
+          'w-[300px] max-w-full max-sm:w-[200px]': activeCount >= 4,
+        })}
       >
         {activeCount === 1 && (
           <div
@@ -414,19 +443,30 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
               const item = processedItems[0];
               const itemUrl = item.processedUrl || item.url;
               const cacheKey = `${item.id}:${item.url}`;
-              const mediaState = mediaStates.get(cacheKey) || { isLoading: false, hasError: false, isLoaded: false };
+              const mediaState = mediaStates.get(cacheKey) || {
+                isLoading: false,
+                hasError: false,
+                isLoaded: false,
+              };
               const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
-              
+
               // Show placeholder only if loading or if there's an error after attempting to load
-              const shouldShowPlaceholder = mediaState.isLoading || (isFailed && mediaState.isLoaded);
-              
+              const shouldShowPlaceholder =
+                mediaState.isLoading || (isFailed && mediaState.isLoaded);
+
               // Show actual content if not loading and no error, or if it's a blob URL (already loaded)
-              const shouldShowContent = !mediaState.isLoading && !isFailed && (mediaState.isLoaded || itemUrl.startsWith('blob:'));
+              const shouldShowContent =
+                !mediaState.isLoading &&
+                !isFailed &&
+                (mediaState.isLoaded || itemUrl.startsWith('blob:'));
 
               return (
                 <>
                   {shouldShowPlaceholder && (
-                    <MediaPlaceholder reason={isFailed ? 'error' : 'deleted'} isLoading={mediaState.isLoading} />
+                    <MediaPlaceholder
+                      reason={isFailed ? 'error' : 'deleted'}
+                      isLoading={mediaState.isLoading}
+                    />
                   )}
                   {shouldShowContent && (
                     <button

@@ -66,7 +66,7 @@ export const storageApi = {
     try {
       // Check if bucket is private (attachments bucket is private by default)
       const isPrivate = bucket === storageConfig.bucketNames.attachments;
-      
+
       if (isPrivate) {
         const { data, error } = await supabase.storage
           .from(bucket)
@@ -140,7 +140,7 @@ export const storageApi = {
    * Upload attachment with optimistic update
    */
   uploadAttachment: async (file: File, chatId: string, userId: string) => {
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop() || 'bin';
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substr(2, 9);
     const fileName = `${timestamp}-${randomSuffix}.${fileExt}`;

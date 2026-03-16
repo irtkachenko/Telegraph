@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
+import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 export default function AuthCodeErrorPage() {
   return (
@@ -17,20 +17,18 @@ export default function AuthCodeErrorPage() {
 
         {/* Error Content */}
         <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-white">
-            Помилка авторизації
-          </h1>
-          
+          <h1 className="text-2xl font-bold text-white">Помилка авторизації</h1>
+
           <p className="text-gray-400 leading-relaxed">
-            На жаль, сталася помилка під час входу через OAuth. 
-            Можливо, термін дії посилання минув або виникли проблеми з сервером.
+            На жаль, сталася помилка під час входу через OAuth. Можливо, термін дії посилання
+            минув або виникли проблеми з сервером.
           </p>
 
           <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4 text-left">
             <h3 className="font-medium text-red-400 mb-2">Що можна спробувати:</h3>
             <ul className="text-sm text-gray-400 space-y-1">
               <li>• Спробуйте увійти знову</li>
-              <li>• Перевірте з'єднання з інтернетом</li>
+              <li>• Перевірте з’єднання з інтернетом</li>
               <li>• Очистіть cookies браузера</li>
               <li>• Якщо проблема повторюється, зверніться до підтримки</li>
             </ul>
@@ -45,7 +43,7 @@ export default function AuthCodeErrorPage() {
               Спробувати знову
             </Link>
           </Button>
-          
+
           <Button variant="outline" asChild className="w-full">
             <Link href="/">
               <Home className="mr-2 h-4 w-4" />
@@ -57,7 +55,7 @@ export default function AuthCodeErrorPage() {
         {/* Additional Info */}
         <div className="text-center">
           <p className="text-xs text-gray-500">
-            Якщо проблема продовжується, будь ласка, зв'яжіться з нашою командою підтримки.
+            Якщо проблема продовжується, будь ласка, зв’яжіться з нашою командою підтримки.
           </p>
         </div>
       </div>

@@ -23,10 +23,10 @@ export function useViewportDetection(): ViewportDetectionResult {
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        setVisibleMessages(prev => {
+        setVisibleMessages((prev) => {
           const newSet = new Set(prev);
-          
-          entries.forEach(entry => {
+
+          entries.forEach((entry) => {
             const messageId = entry.target.getAttribute('data-message-id');
             if (!messageId) return;
 
@@ -43,7 +43,7 @@ export function useViewportDetection(): ViewportDetectionResult {
       {
         threshold: 0.5, // 50% повідомлення має бути видимим
         rootMargin: '-50px 0px -50px 0px', // Враховуємо часткову видимість
-      }
+      },
     );
 
     return () => {
@@ -57,10 +57,10 @@ export function useViewportDetection(): ViewportDetectionResult {
 
     // Встановлюємо data-атрибут для ідентифікації
     element.setAttribute('data-message-id', messageId);
-    
+
     // Зберігаємо елемент для cleanup
     messageElementsRef.current.set(messageId, element);
-    
+
     // Починаємо відстеження
     observerRef.current.observe(element);
   }, []);
@@ -75,9 +75,12 @@ export function useViewportDetection(): ViewportDetectionResult {
   }, []);
 
   // Перевіряємо чи повідомлення видиме
-  const isMessageVisible = useCallback((messageId: string) => {
-    return visibleMessages.has(messageId);
-  }, [visibleMessages]);
+  const isMessageVisible = useCallback(
+    (messageId: string) => {
+      return visibleMessages.has(messageId);
+    },
+    [visibleMessages],
+  );
 
   // Cleanup при unmount
   useEffect(() => {

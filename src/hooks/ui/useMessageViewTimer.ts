@@ -17,34 +17,34 @@ interface MessageTimer {
 }
 
 /**
- * Hook РґР»СЏ РІС–РґСЃС‚РµР¶РµРЅРЅСЏ С‡Р°СЃСѓ РїРµСЂРµРіР»СЏРґСѓ РїРѕРІС–РґРѕРјР»РµРЅСЊ
+ * Hook для відстеження часу перегляду повідомлень
  */
 export function useMessageViewTimer(): MessageViewTimer {
   const timersRef = useRef<Map<string, MessageTimer>>(new Map());
   const [, forceUpdate] = useState({});
 
-  // РџРѕС‡РёРЅР°С”РјРѕ РІС–РґСЃС‚РµР¶РµРЅРЅСЏ РїРµСЂРµРіР»СЏРґСѓ
+  // Починаємо відстеження перегляду
   const startViewing = useCallback((messageId: string) => {
     const existing = timersRef.current.get(messageId);
-    
+
     if (existing) {
-      // РЇРєС‰Рѕ РІР¶Рµ РІС–РґСЃС‚РµР¶СѓС”РјРѕ, РїСЂРѕСЃС‚Рѕ РїРѕРЅРѕРІР»СЋС”РјРѕ СЃС‚Р°РЅ
+      // Якщо вже відстежуємо, просто поновлюємо стан
       existing.isViewing = true;
       existing.startTime = Date.now();
     } else {
-      // РЎС‚РІРѕСЂСЋС”РјРѕ РЅРѕРІРёР№ С‚Р°Р№РјРµСЂ
+      // Створюємо новий таймер
       timersRef.current.set(messageId, {
         startTime: Date.now(),
         totalTime: 0,
         isViewing: true,
       });
     }
-    
-    // Trigger re-render РґР»СЏ РѕРЅРѕРІР»РµРЅРЅСЏ СЃС‚Р°РЅСѓ
+
+    // Trigger re-render для оновлення стану
     forceUpdate({});
   }, []);
 
-  // РџСЂРёРїРёРЅСЏС”РјРѕ РІС–РґСЃС‚РµР¶РµРЅРЅСЏ РїРµСЂРµРіР»СЏРґСѓ
+  // Припиняємо відстеження перегляду
   const stopViewing = useCallback((messageId: string) => {
     const timer = timersRef.current.get(messageId);
     if (!timer || !timer.isViewing) return;
@@ -52,67 +52,71 @@ export function useMessageViewTimer(): MessageViewTimer {
     const viewDuration = Date.now() - timer.startTime;
     timer.totalTime += viewDuration;
     timer.isViewing = false;
-    
-    // Cleanup СЏРєС‰Рѕ РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ РїРµСЂРµРіР»СЏРЅСѓС‚Рѕ РґРѕСЃС‚Р°С‚РЅСЊРѕ РґРѕРІРіРѕ
-    if (timer.totalTime > 60000) { // 1 С…РІРёР»РёРЅР°
+
+    // Cleanup якщо повідомлення переглянуто достатньо довго
+    if (timer.totalTime > 60000) {
+      // 1 хвилина
       timersRef.current.delete(messageId);
     }
-    
+
     forceUpdate({});
   }, []);
 
-  // РћС‚СЂРёРјСѓС”РјРѕ Р·Р°РіР°Р»СЊРЅРёР№ С‡Р°СЃ РїРµСЂРµРіР»СЏРґСѓ
+  // Отримуємо загальний час перегляду
   const getViewTime = useCallback((messageId: string) => {
     const timer = timersRef.current.get(messageId);
     if (!timer) return 0;
 
     let totalTime = timer.totalTime;
-    
-    // РЇРєС‰Рѕ Р·Р°СЂР°Р· РїРµСЂРµРіР»СЏРґР°С”РјРѕ, РґРѕРґР°С”РјРѕ РїРѕС‚РѕС‡РЅСѓ СЃРµСЃС–СЋ
+
+    // Якщо зараз переглядаємо, додаємо поточну сесію
     if (timer.isViewing) {
       totalTime += Date.now() - timer.startTime;
     }
-    
+
     return totalTime;
   }, []);
 
-  // РџРµСЂРµРІС–СЂСЏС”РјРѕ С‡Рё РґРѕСЃС‚Р°С‚РЅСЊРѕ С‡Р°СЃСѓ РїРµСЂРµРіР»СЏРЅСѓС‚Рѕ
-  const isViewedLongEnough = useCallback((messageId: string, minTime: number) => {
-    const viewTime = getViewTime(messageId);
-    return viewTime >= minTime;
-  }, [getViewTime]);
+  // Перевіряємо чи достатньо часу переглянуто
+  const isViewedLongEnough = useCallback(
+    (messageId: string, minTime: number) => {
+      const viewTime = getViewTime(messageId);
+      return viewTime >= minTime;
+    },
+    [getViewTime],
+  );
 
-  // РћС‡РёС‰СѓС”РјРѕ РІСЃС– С‚Р°Р№РјРµСЂРё
+  // Очищуємо всі таймери
   const clearTimers = useCallback(() => {
     timersRef.current.clear();
     forceUpdate({});
   }, []);
 
-  // РђРІС‚РѕРјР°С‚РёС‡РЅРµ РѕС‡РёС‰РµРЅРЅСЏ СЃС‚Р°СЂРёС… С‚Р°Р№РјРµСЂС–РІ
+  // Автоматичне очищення старих таймерів
   const cleanup = useCallback(() => {
     const now = Date.now();
     const toDelete: string[] = [];
-    
+
     timersRef.current.forEach((timer, messageId) => {
-      // Р’РёРґР°Р»СЏС”РјРѕ С‚Р°Р№РјРµСЂРё СЏРєРёРј Р±С–Р»СЊС€Рµ 5 С…РІРёР»РёРЅ С– РЅРµР°РєС‚РёРІРЅС–
-      if (!timer.isViewing && (now - timer.startTime) > 300000) {
+      // Видаляємо таймери яким більше 5 хвилин і неактивні
+      if (!timer.isViewing && now - timer.startTime > 300000) {
         toDelete.push(messageId);
       }
     });
-    
-    toDelete.forEach(messageId => {
+
+    toDelete.forEach((messageId) => {
       timersRef.current.delete(messageId);
     });
-    
+
     if (toDelete.length > 0) {
       forceUpdate({});
     }
   }, []);
 
-  // РџРµСЂС–РѕРґРёС‡РЅРµ РѕС‡РёС‰РµРЅРЅСЏ
+  // Періодичне очищення
   const cleanupInterval = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    cleanupInterval.current = setInterval(cleanup, 30000); // РљРѕР¶РЅС– 30 СЃРµРєСѓРЅРґ
+    cleanupInterval.current = setInterval(cleanup, 30000); // Кожні 30 секунд
 
     return () => {
       if (cleanupInterval.current) {
@@ -130,6 +134,3 @@ export function useMessageViewTimer(): MessageViewTimer {
     clearTimers,
   };
 }
-
-
-

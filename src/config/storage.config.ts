@@ -92,8 +92,6 @@ export const storageConfig: StorageConfig = {
 
 // Helper functions for working with storage config
 
-import { ConfigError } from '@/shared/lib/errors';
-
 // Helper functions for working with storage config
 
 export function getBucketName(bucketKey: keyof StorageConfig['bucketNames']): string {
@@ -112,7 +110,7 @@ export function isStaticAsset(pathname: string): boolean {
 
 export function getStaticAssetPattern(): string {
   const extensions = storageConfig.staticAssetExtensions.join('|');
-  return `.*\.(?:${extensions})$`;
+  return `.*.(?:${extensions})$`;
 }
 
 export function getDefaultMaxFileSize(): number {

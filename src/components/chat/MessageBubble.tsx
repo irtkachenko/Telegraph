@@ -103,12 +103,18 @@ const MessageBubble = memo(
                   if (!rId) return null;
 
                   const reply = message.reply_details || message.reply_to;
-                  if (!reply) return null;
+                  const fallbackReply = reply || {
+                    id: rId,
+                    sender: { name: null },
+                    sender_id: null,
+                    content: '????????????...',
+                    attachments: null,
+                  };
 
-                  const replySenderId = reply.sender_id;
+                  const replySenderId = fallbackReply.sender_id;
 
                   const senderName =
-                    reply.sender?.name ||
+                    fallbackReply.sender?.name ||
                     (replySenderId === currentUserId ? 'You' : otherParticipantName);
 
                   return (
@@ -116,7 +122,7 @@ const MessageBubble = memo(
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onScrollToMessage(reply.id);
+                        onScrollToMessage(fallbackReply.id);
                       }}
                       className="mb-2 w-full flex flex-col items-start px-2 py-1 rounded-md bg-black/20 border-l-2 border-blue-400/50 cursor-pointer hover:bg-black/40 transition-colors text-[11px] text-left overflow-hidden min-w-0"
                     >
@@ -124,7 +130,8 @@ const MessageBubble = memo(
                         {senderName || 'Unknown'}
                       </span>
                       <span className="text-white/60 line-clamp-1 italic">
-                        {reply.content || (reply.attachments?.length ? '📎 Attachment' : '...')}
+                        {fallbackReply.content ||
+                          (fallbackReply.attachments?.length ? 'Attachment' : '...')}
                       </span>
                     </button>
                   );

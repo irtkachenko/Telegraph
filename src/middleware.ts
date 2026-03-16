@@ -29,9 +29,12 @@ export default async function middleware(request: NextRequest) {
       url.pathname = '/';
       const redirectResponse = NextResponse.redirect(url);
 
-      supabaseResponse.cookies
-        .getAll()
-        .forEach((c: any) => redirectResponse.cookies.set(c.name, c.value, c));
+      const cookies = supabaseResponse.cookies.getAll() as Array<{
+        name: string;
+        value: string;
+        [key: string]: unknown;
+      }>;
+      cookies.forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
       return redirectResponse;
     }
 
@@ -39,12 +42,15 @@ export default async function middleware(request: NextRequest) {
       url.pathname = '/chat';
       const redirectResponse = NextResponse.redirect(url);
 
-      supabaseResponse.cookies
-        .getAll()
-        .forEach((c: any) => redirectResponse.cookies.set(c.name, c.value, c));
+      const cookies = supabaseResponse.cookies.getAll() as Array<{
+        name: string;
+        value: string;
+        [key: string]: unknown;
+      }>;
+      cookies.forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
       return redirectResponse;
     }
-  } catch (e) {
+  } catch (_error) {
     if (request.nextUrl.pathname !== '/' && !request.nextUrl.pathname.startsWith('/auth')) {
       return NextResponse.redirect(new URL('/', request.url));
     }
