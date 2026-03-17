@@ -84,9 +84,12 @@ export function useViewportDetection(): ViewportDetectionResult {
 
   // Cleanup при unmount
   useEffect(() => {
+    const observer = observerRef.current;
+    const elementsMap = messageElementsRef.current;
+    
     return () => {
-      observerRef.current?.disconnect();
-      messageElementsRef.current.clear();
+      observer?.disconnect();
+      elementsMap.clear();
     };
   }, []);
 

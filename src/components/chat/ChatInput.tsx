@@ -101,6 +101,9 @@ export default function ChatInput({
     if (onReplyCancel) onReplyCancel();
     if (onEditCancel) onEditCancel();
 
+    // Trigger immediate scroll for optimistic messages
+    if (onMessageSent) onMessageSent();
+
     try {
       if (editingMessage) {
         // РЕДАГУВАННЯ
@@ -124,8 +127,6 @@ export default function ChatInput({
           client_id: clientId,
         });
       }
-
-      if (onMessageSent) onMessageSent();
     } catch (_error) {
       handleError(
         new NetworkError('Failed to process message', 'message', 'MESSAGE_PROCESS_ERROR', 500),

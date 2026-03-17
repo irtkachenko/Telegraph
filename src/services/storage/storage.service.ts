@@ -52,6 +52,7 @@ export const storageApi = {
         'SIGNED_URL_ERROR',
         signedUrlError.status || 500,
       );
+
       handleError(error, 'StorageApi.getSignedUrl');
       throw error;
     }
@@ -82,6 +83,7 @@ export const storageApi = {
             'SIGNED_URL_ERROR',
             error.status || 500,
           );
+
           handleError(networkError, 'StorageApi.getUrl');
           throw networkError;
         }

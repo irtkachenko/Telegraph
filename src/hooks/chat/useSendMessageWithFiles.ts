@@ -183,7 +183,9 @@ export function useSendMessageWithFiles(chatId: string) {
       }
 
       // Очищення preview URLs
-      pendingAttachments.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+      pendingAttachments.forEach(({ previewUrl }) => {
+        URL.revokeObjectURL(previewUrl);
+      });
 
       // Повідомляємо про помилки завантаження файлів
       if (failedUploads.length > 0) {
@@ -307,7 +309,7 @@ export function useSendMessageWithFiles(chatId: string) {
       return { previousData, optimisticAttachments, clientId };
     },
 
-    onError: (error: Error & { status?: number }, variables, context) => {
+    onError: (error: Error & { status?: number }, _variables, context) => {
       handleError(
         new AuthError(error.message, 'SEND_MESSAGE_ERROR', error.status || 500),
         'SendMessageWithFiles',
@@ -324,8 +326,8 @@ export function useSendMessageWithFiles(chatId: string) {
       queryClient.setQueryData(['messages', chatId], context?.previousData);
     },
 
-    onSuccess: (result, variables, context) => {
-      const { message, uploadedFiles, failedFiles, clientId } = result;
+    onSuccess: (result, _variables, context) => {
+      const { message, failedFiles, clientId } = result;
 
       queryClient.setQueryData(['messages', chatId], (old: InfiniteData<Message[]> | undefined) => {
         if (!old) return old;

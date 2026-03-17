@@ -4,7 +4,8 @@
 
 import { toast } from 'sonner';
 import type { AppError } from './errors';
-import { createErrorFromStatus, getErrorMessage, isAppError, isOperationalError } from './errors';
+import { createErrorFromStatus, isAppError } from './errors';
+import { shouldSuppressError } from '@/config/error-suppression.config';
 
 // Logging configuration
 interface ErrorLogConfig {
@@ -50,9 +51,7 @@ export function handleError(
   context?: string,
   config: Partial<ErrorLogConfig> = {},
 ): AppError {
-  const finalConfig = { ...defaultConfig, ...config };
-
-  // Convert raw error into structured AppError
+  // Convert raw error into structured AppError first for analysis
   let appError: AppError;
 
   if (isAppError(error)) {
@@ -62,6 +61,17 @@ export function handleError(
   } else {
     appError = createErrorFromStatus(500, String(error), 'UNKNOWN_ERROR');
   }
+
+  // Check if this error should be suppressed based on centralized rules
+  const isSuppressed = shouldSuppressError(appError, context);
+
+  const finalConfig: ErrorLogConfig = { 
+    ...defaultConfig, 
+    // Automatically disable console/toast if suppressed, UNLESS explicitly forced
+    enableConsoleLog: config.enableConsoleLog ?? (defaultConfig.enableConsoleLog && !isSuppressed),
+    enableToast: config.enableToast ?? (defaultConfig.enableToast && !isSuppressed),
+    ...config 
+  };
 
   // Prepend context to the error message for better traceability
   if (context) {

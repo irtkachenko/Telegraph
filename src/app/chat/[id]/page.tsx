@@ -125,6 +125,12 @@ export default function ChatPage() {
       const timer = setTimeout(() => setShowLoader(false), remaining);
       return () => clearTimeout(timer);
     }
+    
+    // Fallback for initial state if no messages
+    if (!isMessagesLoading && messages.length === 0 && !initialScrollDone) {
+      setInitialScrollDone(true);
+      setPostScrollDelayDone(true);
+    }
   }, [
     isAuthLoading,
     isChatLoading,
@@ -135,23 +141,7 @@ export default function ChatPage() {
     chat,
   ]);
 
-  // Auto-scroll to bottom only on INITIAL load
-  useEffect(() => {
-    if (!isMessagesLoading && messages.length > 0 && !initialScrollDone) {
-      requestAnimationFrame(() => {
-        virtuosoRef.current?.scrollToIndex({
-          index: messages.length - 1,
-          behavior: 'auto',
-          align: 'end',
-        });
-        setInitialScrollDone(true);
-        setTimeout(() => setPostScrollDelayDone(true), 120);
-      });
-    } else if (!isMessagesLoading && messages.length === 0 && !initialScrollDone) {
-      setInitialScrollDone(true);
-      setPostScrollDelayDone(true);
-    }
-  }, [isMessagesLoading, messages.length, initialScrollDone]);
+  // Removed manual scroll useEffect as we're using initialTopMostItemIndex now
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
@@ -247,9 +237,9 @@ export default function ChatPage() {
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            followOutput="auto"
-            overscan={500}
-            increaseViewportBy={{ bottom: 200, top: 0 }}
+            initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
+            followOutput="smooth"
+            overscan={200}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
               setShowScrollButton(!atBottom);
@@ -373,15 +363,8 @@ export default function ChatPage() {
               setEditingMessage(null);
 
               if (!wasEditing) {
-                // Скролимо до messages.length (без -1), щоб потрапити на саме нове повідомлення,
-                // навіть якщо стейт оновлюється з невеликою затримкою.
-                setTimeout(() => {
-                  virtuosoRef.current?.scrollToIndex({
-                    index: messages.length,
-                    behavior: 'smooth',
-                    align: 'end',
-                  });
-                }, 50);
+                // When sending a new message, we rely on Virtuoso's followOutput="smooth"
+                // to automatically scroll to the bottom. Setting focus back to input or other cleanup can happen here.
               }
             }}
           />

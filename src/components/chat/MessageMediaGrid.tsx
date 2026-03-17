@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getUrlCheckInterval, getUrlExpiryBuffer, storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
+import { useStorageStore } from '@/store/useStorageStore';
 import { extractStorageRef } from '@/lib/storage-utils';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
@@ -19,17 +20,6 @@ interface AttachmentWithUrl extends Attachment {
   processedUrl?: string;
 }
 
-interface CachedUrl {
-  url: string;
-  expiresAt: number;
-}
-
-interface MediaItemState {
-  isLoading: boolean;
-  hasError: boolean;
-  isLoaded: boolean;
-}
-
 const MediaPlaceholder = ({
   reason = 'deleted',
   isLoading = false,
@@ -39,24 +29,20 @@ const MediaPlaceholder = ({
 }) => {
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center w-full h-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center min-h-[150px]">
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center z-10 min-h-[150px]">
         <div className="w-5 h-5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin mb-2" />
         <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-          Loading...
+          Завантаження...
         </p>
       </div>
     );
   }
 
   const Icon = reason === 'deleted' ? FileX : ImageOff;
-  const text = reason === 'deleted' ? 'Deleted' : 'Error';
-
-  if (!hasItems) {
-    return <div className="hidden" />;
-  }
+  const text = reason === 'deleted' ? 'Видалено' : 'Помилка';
 
   return (
-    <div className="flex flex-col items-center justify-center w-full h-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center min-h-[150px]">
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-white/5 rounded-xl p-4 text-center z-10 min-h-[150px]">
       <Icon className="w-5 h-5 text-neutral-500 mb-2" />
       <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{text}</p>
     </div>
@@ -64,12 +50,20 @@ const MediaPlaceholder = ({
 };
 
 export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
-  const hasItems = !!items && items.length > 0;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
-  const [processedUrls, setProcessedUrls] = useState<Map<string, CachedUrl>>(new Map());
   const [refreshTick, setRefreshTick] = useState(0);
-  const [mediaStates, setMediaStates] = useState<Map<string, MediaItemState>>(new Map());
+  
+  // Zustand store
+  const { 
+    urlCache, 
+    mediaStates, 
+    failedUrls, 
+    setUrl, 
+    setMediaState, 
+    addFailedUrl, 
+    removeFailedUrl 
+  } = useStorageStore();
+
   const { getUrl } = useStorageUrl();
   const pendingRef = useRef<Set<string>>(new Set());
   const failedCacheRef = useRef<Map<string, number>>(new Map());
@@ -89,46 +83,28 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   useEffect(() => {
     if (!items || items.length === 0) return;
 
-    const newStates = new Map<string, MediaItemState>();
     items.forEach((item) => {
       const key = `${item.id}:${item.url}`;
-      const existing = mediaStates.get(key);
+      const existing = mediaStates[key];
+      
       if (!existing) {
-        // Start with loading state only for items that need URL resolution
         const needsUrlResolution =
           !item.url.startsWith('blob:') && extractStorageRef(item.url) !== null;
         const isUploading = !!item.uploading;
-        newStates.set(key, {
+        
+        setMediaState(key, {
           isLoading: needsUrlResolution || isUploading,
           hasError: false,
           isLoaded: !needsUrlResolution && !isUploading,
         });
-      } else {
-        newStates.set(key, existing);
       }
     });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMediaStates(newStates);
-  }, [items?.length, items?.map((item) => `${item.id}:${item.url}`).join(',')]);
+  }, [items, mediaStates, setMediaState]);
 
-  // Prune caches when items change
+  // Prune local caches when items change
   useEffect(() => {
     if (!items || items.length === 0) return;
     const keys = new Set(items.map((item) => `${item.id}:${item.url}`));
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProcessedUrls((prev) => {
-      let changed = false;
-      const next = new Map<string, CachedUrl>();
-      prev.forEach((value, key) => {
-        if (keys.has(key)) {
-          next.set(key, value);
-        } else {
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
 
     // Clear pending timeouts for items that no longer exist
     itemTimeoutsRef.current.forEach((timeoutId, key) => {
@@ -141,7 +117,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     failedCacheRef.current.forEach((_value, key) => {
       if (!keys.has(key)) failedCacheRef.current.delete(key);
     });
-  }, [items?.length, items?.map((item) => `${item.id}:${item.url}`).join(',')]); // Memoize by content
+  }, [items]);
 
   // Resolve and refresh signed URLs with per-item debouncing
   useEffect(() => {
@@ -156,12 +132,9 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       const cacheKey = `${item.id}:${item.url}`;
       const originalUrl = item.url;
 
-      // Skip blob URLs (local previews)
-      if (originalUrl.startsWith('blob:')) {
-        return;
-      }
+      if (originalUrl.startsWith('blob:')) return;
 
-      const cached = processedUrls.get(cacheKey);
+      const cached = urlCache[cacheKey];
       const needsRefresh = !cached || cached.expiresAt - now <= bufferMs;
 
       if (!needsRefresh) return;
@@ -173,61 +146,41 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       if (!ref) return;
 
       if (pendingRef.current.has(cacheKey)) return;
-      if (processingRef.current.has(cacheKey)) return; // Rate limiting
+      if (processingRef.current.has(cacheKey)) return;
 
-      // Clear existing timeout for this item
       const existingTimeout = itemTimeoutsRef.current.get(cacheKey);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
+      if (existingTimeout) clearTimeout(existingTimeout);
 
-      // Set new timeout for this specific item
       const timeoutId = setTimeout(() => {
         itemTimeoutsRef.current.delete(cacheKey);
-
         pendingRef.current.add(cacheKey);
         processingRef.current.add(cacheKey);
 
         getUrl(ref.bucket, ref.path)
           .then((resolvedUrl) => {
-            setProcessedUrls((prev) => {
-              const next = new Map(prev);
-              next.set(cacheKey, { url: resolvedUrl, expiresAt: Date.now() + expiryMs });
-              return next;
-            });
+            const cacheData = { url: resolvedUrl, expiresAt: Date.now() + expiryMs };
+            setUrl(cacheKey, cacheData);
+            
             failedCacheRef.current.delete(cacheKey);
-            setFailedUrls((prev) => {
-              if (!prev.has(originalUrl)) return prev;
-              const next = new Set(prev);
-              next.delete(originalUrl);
-              return next;
-            });
-            // Mark as loaded when URL is successfully resolved
-            setMediaStates((prev) => {
-              const next = new Map(prev);
-              next.set(cacheKey, { isLoading: false, hasError: false, isLoaded: true });
-              return next;
-            });
+            removeFailedUrl(originalUrl);
+
+            setMediaState(cacheKey, { isLoading: false, hasError: false, isLoaded: true });
           })
           .catch(() => {
             failedCacheRef.current.set(cacheKey, Date.now());
-            setFailedUrls((prev) => new Set(prev).add(originalUrl));
-            // Mark as error when URL resolution fails
-            setMediaStates((prev) => {
-              const next = new Map(prev);
-              next.set(cacheKey, { isLoading: false, hasError: true, isLoaded: false });
-              return next;
-            });
+            addFailedUrl(originalUrl);
+            
+            setMediaState(cacheKey, { isLoading: false, hasError: true, isLoaded: false });
           })
           .finally(() => {
             pendingRef.current.delete(cacheKey);
-            processingRef.current.delete(cacheKey); // Clear rate limiting
+            processingRef.current.delete(cacheKey);
           });
-      }, 500); // 500ms debounce per item
+      }, 500);
 
       itemTimeoutsRef.current.set(cacheKey, timeoutId);
     });
-  }, [items, getUrl, refreshTick, processedUrls, getUrlExpiryBuffer, getUrlCheckInterval]);
+  }, [items, getUrl, urlCache, setUrl, setMediaState, addFailedUrl, removeFailedUrl]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -248,7 +201,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
     return items.map((item) => {
       const cacheKey = `${item.id}:${item.url}`;
-      const cached = processedUrls.get(cacheKey);
+      const cached = urlCache[cacheKey];
 
       if (cached && cached.expiresAt > now) {
         return { ...item, processedUrl: cached.url };
@@ -256,47 +209,36 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
       return { ...item, processedUrl: item.url };
     });
-  }, [items, processedUrls, refreshTick]);
+  }, [items, refreshTick, urlCache]);
 
   const handleImageError = useCallback((url: string) => {
-    setFailedUrls((prev) => new Set(prev).add(url));
-    // Update media state to show error
-    setMediaStates((prev) => {
-      const next = new Map(prev);
-      prev.forEach((state, key) => {
-        if (key.includes(url)) {
-          next.set(key, { ...state, isLoading: false, hasError: true, isLoaded: false });
-        }
-      });
-      return next;
+    addFailedUrl(url);
+    // Update all media states that share this URL (unlikely but safe)
+    Object.keys(mediaStates).forEach((key) => {
+      if (key.includes(url)) {
+        setMediaState(key, { isLoading: false, hasError: true, isLoaded: false });
+      }
     });
-  }, []);
+  }, [addFailedUrl, mediaStates, setMediaState]);
 
   const handleImageLoad = useCallback((url: string) => {
-    // Update media state to show loaded
-    setMediaStates((prev) => {
-      const next = new Map(prev);
-      prev.forEach((state, key) => {
-        if (key.includes(url)) {
-          next.set(key, { ...state, isLoading: false, hasError: false, isLoaded: true });
-        }
-      });
-      return next;
+    Object.keys(mediaStates).forEach((key) => {
+      if (key.includes(url)) {
+        setMediaState(key, { isLoading: false, hasError: false, isLoaded: true });
+      }
     });
-  }, []);
+  }, [mediaStates, setMediaState]);
 
-  const handleImageLoadStart = useCallback((url: string) => {
-    // Update media state to show loading
-    setMediaStates((prev) => {
-      const next = new Map(prev);
-      prev.forEach((state, key) => {
+  const handleImageLoadStart = useCallback(
+    (url: string) => {
+      Object.keys(mediaStates).forEach((key) => {
         if (key.includes(url)) {
-          next.set(key, { ...state, isLoading: true, hasError: false, isLoaded: false });
+          setMediaState(key, { isLoading: true, hasError: false, isLoaded: false });
         }
       });
-      return next;
-    });
-  }, []);
+    },
+    [mediaStates, setMediaState],
+  );
 
   const activeMedia = useMemo(
     () =>
@@ -305,8 +247,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       ),
     [processedItems, failedUrls],
   );
-  const count = processedItems.length;
-  const activeCount = activeMedia.length;
+  const activeCount = items.length; // Використовуємо повну кількість для стабільної сітки
 
   const handleMediaClick = useCallback(
     (index: number) => {
@@ -337,19 +278,18 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
     (item: AttachmentWithUrl, index: number, layoutClass: string) => {
       const itemUrl = item.processedUrl || item.url;
       const cacheKey = `${item.id}:${item.url}`;
-      const mediaState = mediaStates.get(cacheKey) || {
+      const mediaState = mediaStates[cacheKey] || {
         isLoading: false,
         hasError: false,
         isLoaded: false,
       };
-      const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
+      const isFailed = failedUrls.has(itemUrl) || item.is_deleted || mediaState.hasError;
 
-      // Show placeholder only if loading or if there's an error after attempting to load
-      const shouldShowPlaceholder = mediaState.isLoading || (isFailed && mediaState.isLoaded);
+      // Показуємо заглушку, якщо вантажиться або якщо сталася помилка
+      const shouldShowPlaceholder = mediaState.isLoading || isFailed || item.uploading;
 
-      // Show actual content if not loading and no error
-      const shouldShowContent =
-        !mediaState.isLoading && !isFailed && mediaState.isLoaded;
+      // Показуємо контент тільки якщо немає помилок і завантаження завершено
+      const shouldShowContent = !shouldShowPlaceholder && (mediaState.isLoaded || item.url.startsWith('blob:'));
 
       return (
         <div
@@ -362,7 +302,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
           {shouldShowPlaceholder && (
             <MediaPlaceholder
               reason={isFailed ? 'error' : 'deleted'}
-              isLoading={mediaState.isLoading}
+              isLoading={mediaState.isLoading || item.uploading}
             />
           )}
           {shouldShowContent && (
@@ -444,61 +384,70 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
               const item = processedItems[0];
               const itemUrl = item.processedUrl || item.url;
               const cacheKey = `${item.id}:${item.url}`;
-              const mediaState = mediaStates.get(cacheKey) || {
+              const mediaState = mediaStates[cacheKey] || {
                 isLoading: false,
                 hasError: false,
                 isLoaded: false,
               };
-              const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
+              const isFailed = failedUrls.has(itemUrl) || item.is_deleted || mediaState.hasError;
 
-              // Show placeholder only if loading or if there's an error after attempting to load
-              const shouldShowPlaceholder =
-                mediaState.isLoading || (isFailed && mediaState.isLoaded);
+              // Показуємо заглушку, якщо вантажиться або якщо сталася помилка
+              const shouldShowPlaceholder = (mediaState.isLoading && !item.url.startsWith('blob:')) || isFailed || item.uploading;
 
-              // Show actual content if not loading and no error
-              const shouldShowContent =
-                !mediaState.isLoading &&
-                !isFailed &&
-                mediaState.isLoaded;
+              // Показуємо контент: або коли успішно завантажено, або якщо це blob (оптимістичний UI)
+              // АЛЕ при завантаженні blob (uploading) ми не показуємо контент взагалі
+              const shouldShowContent = !shouldShowPlaceholder && (mediaState.isLoaded || item.url.startsWith('blob:'));
 
               return (
                 <>
                   {shouldShowPlaceholder && (
                     <MediaPlaceholder
                       reason={isFailed ? 'error' : 'deleted'}
-                      isLoading={mediaState.isLoading}
+                      isLoading={mediaState.isLoading || item.uploading}
                     />
                   )}
-                  {shouldShowContent && (
-                    <button
-                      type="button"
-                      onClick={() => handleMediaClick(0)}
-                      className="w-full h-full relative block"
-                    >
-                      {item.type === 'video' ? (
-                        <video
-                          src={itemUrl}
-                          className="w-full h-full object-contain bg-black"
-                          onLoadedData={() => handleImageLoad(itemUrl)}
-                          onError={() => handleImageError(itemUrl)}
+                      {shouldShowContent && (
+                        <button
+                          type="button"
+                          onClick={() => handleMediaClick(0)}
+                          className="w-full h-full relative block"
                         >
-                          <track kind="captions" />
-                        </video>
-                      ) : (
-                        <Image
-                          src={itemUrl}
-                          alt=""
-                          fill
-                          className="object-contain bg-neutral-900/10"
-                          unoptimized
-                          onLoadStart={() => handleImageLoadStart(itemUrl)}
-                          onLoad={() => handleImageLoad(itemUrl)}
-                          onError={() => handleImageError(itemUrl)}
-                          sizes="(max-width: 768px) 280px, 400px"
-                        />
+                          {item.type === 'video' ? (
+                            <video
+                              src={itemUrl}
+                              className="w-full h-full object-contain bg-black"
+                              onLoadedData={() => handleImageLoad(itemUrl)}
+                              onError={() => handleImageError(itemUrl)}
+                            >
+                              <track kind="captions" />
+                            </video>
+                          ) : (
+                            <Image
+                              src={itemUrl}
+                              alt=""
+                              fill
+                              className="object-contain bg-neutral-900/10"
+                              unoptimized
+                              onLoadStart={() => handleImageLoadStart(itemUrl)}
+                              onLoad={() => handleImageLoad(itemUrl)}
+                              onError={() => handleImageError(itemUrl)}
+                              sizes="(max-width: 768px) 280px, 400px"
+                            />
+                          )}
+                          
+                          {/* Loader overlay for uploading or initial loading */}
+                          {(item.uploading || (mediaState.isLoading && !item.url.startsWith('blob:'))) && (
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
+                              <div className="w-8 h-8 border-2 border-white/20 border-t-blue-500 rounded-full animate-spin mb-2" />
+                              {item.uploading && (
+                                <span className="text-[10px] text-white/70 font-bold uppercase tracking-widest">
+                                  Надсилаємо...
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </button>
                       )}
-                    </button>
-                  )}
                 </>
               );
             })()}
