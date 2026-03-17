@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 export interface ViewportDetectionResult {
-  visibleMessages: Set<string>;
   observeMessage: (messageId: string, element: HTMLElement) => void;
   unobserveMessage: (messageId: string) => void;
   isMessageVisible: (messageId: string) => boolean;
@@ -13,7 +12,7 @@ export interface ViewportDetectionResult {
  * Hook для відстеження видимості повідомлень в viewport через IntersectionObserver
  */
 export function useViewportDetection(): ViewportDetectionResult {
-  const [visibleMessages, setVisibleMessages] = useState<Set<string>>(new Set());
+  const visibleMessagesRef = useRef<Set<string>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const messageElementsRef = useRef<Map<string, HTMLElement>>(new Map());
 
@@ -23,21 +22,15 @@ export function useViewportDetection(): ViewportDetectionResult {
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        setVisibleMessages((prev) => {
-          const newSet = new Set(prev);
+        entries.forEach((entry) => {
+          const messageId = entry.target.getAttribute('data-message-id');
+          if (!messageId) return;
 
-          entries.forEach((entry) => {
-            const messageId = entry.target.getAttribute('data-message-id');
-            if (!messageId) return;
-
-            if (entry.isIntersecting) {
-              newSet.add(messageId);
-            } else {
-              newSet.delete(messageId);
-            }
-          });
-
-          return newSet;
+          if (entry.isIntersecting) {
+            visibleMessagesRef.current.add(messageId);
+          } else {
+            visibleMessagesRef.current.delete(messageId);
+          }
         });
       },
       {
@@ -77,24 +70,25 @@ export function useViewportDetection(): ViewportDetectionResult {
   // Перевіряємо чи повідомлення видиме
   const isMessageVisible = useCallback(
     (messageId: string) => {
-      return visibleMessages.has(messageId);
+      return visibleMessagesRef.current.has(messageId);
     },
-    [visibleMessages],
+    [],
   );
 
   // Cleanup при unmount
   useEffect(() => {
     const observer = observerRef.current;
     const elementsMap = messageElementsRef.current;
+    const visibleSet = visibleMessagesRef.current;
     
     return () => {
       observer?.disconnect();
       elementsMap.clear();
+      visibleSet.clear();
     };
   }, []);
 
   return {
-    visibleMessages,
     observeMessage,
     unobserveMessage,
     isMessageVisible,

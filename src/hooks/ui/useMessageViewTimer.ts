@@ -1,6 +1,6 @@
-﻿'use client';
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 export interface MessageViewTimer {
   startViewing: (messageId: string) => void;
@@ -21,7 +21,6 @@ interface MessageTimer {
  */
 export function useMessageViewTimer(): MessageViewTimer {
   const timersRef = useRef<Map<string, MessageTimer>>(new Map());
-  const [, forceUpdate] = useState({});
 
   // Починаємо відстеження перегляду
   const startViewing = useCallback((messageId: string) => {
@@ -39,9 +38,6 @@ export function useMessageViewTimer(): MessageViewTimer {
         isViewing: true,
       });
     }
-
-    // Trigger re-render для оновлення стану
-    forceUpdate({});
   }, []);
 
   // Припиняємо відстеження перегляду
@@ -58,8 +54,6 @@ export function useMessageViewTimer(): MessageViewTimer {
       // 1 хвилина
       timersRef.current.delete(messageId);
     }
-
-    forceUpdate({});
   }, []);
 
   // Отримуємо загальний час перегляду
@@ -89,7 +83,6 @@ export function useMessageViewTimer(): MessageViewTimer {
   // Очищуємо всі таймери
   const clearTimers = useCallback(() => {
     timersRef.current.clear();
-    forceUpdate({});
   }, []);
 
   // Автоматичне очищення старих таймерів
@@ -107,10 +100,6 @@ export function useMessageViewTimer(): MessageViewTimer {
     toDelete.forEach((messageId) => {
       timersRef.current.delete(messageId);
     });
-
-    if (toDelete.length > 0) {
-      forceUpdate({});
-    }
   }, []);
 
   // Періодичне очищення

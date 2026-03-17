@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import ChatInput from '@/components/chat/ChatInput';
@@ -141,7 +141,21 @@ export default function ChatPage() {
     chat,
   ]);
 
-  // Removed manual scroll useEffect as we're using initialTopMostItemIndex now
+  // Force initial scroll to bottom
+  useEffect(() => {
+    if (!isMessagesLoading && messages.length > 0 && !initialScrollDone && virtuosoRef.current) {
+      const timer = setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: messages.length - 1,
+          align: 'end',
+          behavior: 'auto',
+        });
+        setInitialScrollDone(true);
+        setTimeout(() => setPostScrollDelayDone(true), 200);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMessagesLoading, messages.length, initialScrollDone]);
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
