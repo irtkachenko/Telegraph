@@ -238,8 +238,10 @@ export default function ChatPage() {
             ref={virtuosoRef}
             data={messages}
             initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
-            followOutput="smooth"
-            overscan={200}
+            alignToBottom
+            followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
+            overscan={1000}
+            increaseViewportBy={{ bottom: 800, top: 800 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
               setShowScrollButton(!atBottom);
