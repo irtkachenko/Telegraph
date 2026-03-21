@@ -52,25 +52,32 @@ export function useMarkAsRead() {
 
     onMutate: async ({ chatId, messageId }) => {
       await queryClient.cancelQueries({ queryKey: ['chats'] });
+      await queryClient.cancelQueries({ queryKey: ['chat', chatId], exact: true });
+
       const previousChats = queryClient.getQueryData(['chats']);
+      const previousChatDetails = queryClient.getQueryData(['chat', chatId]);
 
       queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
         mapChatsInfinite(old, (chat) => {
           if (chat.id !== chatId) return chat;
           const isCurrentUser = chat.user_id === user?.id;
-          const readField = isCurrentUser ? 'user_last_read' : 'recipient_last_read';
-
-          return {
-            ...chat,
-            [readField]: {
-              id: messageId,
-              created_at: new Date().toISOString(),
-            },
-          };
+          if (isCurrentUser) {
+            return { ...chat, user_last_read_id: messageId };
+          }
+          return { ...chat, recipient_last_read_id: messageId };
         }),
       );
 
-      return { previousChats };
+      queryClient.setQueryData<FullChat>(['chat', chatId], (old) => {
+        if (!old) return old;
+        const isCurrentUser = old.user_id === user?.id;
+        if (isCurrentUser) {
+          return { ...old, user_last_read_id: messageId };
+        }
+        return { ...old, recipient_last_read_id: messageId };
+      });
+
+      return { previousChats, previousChatDetails };
     },
 
     onError: (error, _variables, context) => {
@@ -79,6 +86,20 @@ export function useMarkAsRead() {
       if (context?.previousChats) {
         queryClient.setQueryData(['chats'], context.previousChats);
       }
+      if (context?.previousChatDetails) {
+        queryClient.setQueryData(['chat', _variables.chatId], context.previousChatDetails);
+      }
+    },
+
+    onSuccess: ({ chatId, messageId }) => {
+      queryClient.setQueryData<FullChat>(['chat', chatId], (old) => {
+        if (!old) return old;
+        const isCurrentUser = old.user_id === user?.id;
+        if (isCurrentUser) {
+          return { ...old, user_last_read_id: messageId };
+        }
+        return { ...old, recipient_last_read_id: messageId };
+      });
     },
   });
 }

@@ -1,6 +1,6 @@
-
+/* eslint-disable react-compiler/react-compiler */
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { create } from 'zustand';
 import {
   getHeartbeatInterval,
@@ -36,6 +36,8 @@ const RECONNECT_DELAY = getReconnectDelay();
 const HEARTBEAT_INTERVAL = getHeartbeatInterval();
 const PRESENCE_DEBOUNCE_DELAY = getPresenceDebounceDelay();
 const INACTIVITY_TIMEOUT = getInactivityTimeout();
+const MIN_LAST_SEEN_UPDATE_INTERVAL = 15000;
+const LAST_SEEN_TS_STORAGE_KEY = 'trace:last-seen-updated-at';
 
 function createPresenceManager(): PresenceManager {
   return {
@@ -53,6 +55,19 @@ function createPresenceManager(): PresenceManager {
 }
 
 async function updateLastSeen(): Promise<void> {
+  const now = Date.now();
+  if (typeof window !== 'undefined') {
+    try {
+      const rawLast = window.sessionStorage.getItem(LAST_SEEN_TS_STORAGE_KEY);
+      const last = rawLast ? Number(rawLast) : 0;
+
+      if (Number.isFinite(last) && now - last < MIN_LAST_SEEN_UPDATE_INTERVAL) return;
+      window.sessionStorage.setItem(LAST_SEEN_TS_STORAGE_KEY, String(now));
+    } catch {
+      // Ignore storage errors and continue with update.
+    }
+  }
+
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/update_last_seen`;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
@@ -99,6 +114,10 @@ function handleBeforeUnload(): void {
   void updateLastSeen();
 }
 
+function handlePageHide(): void {
+  void updateLastSeen();
+}
+
 function updateActivity(manager: PresenceManager): void {
   manager.lastActivity = Date.now();
 
@@ -111,10 +130,10 @@ function updateActivity(manager: PresenceManager): void {
   manager.cleanupTimeout = setTimeout(() => {
     // Check if manager is still inactive and has no subscribers
     if (
-      globalManager &&
-      globalManager.userId === manager.userId &&
-      globalManager.subscribers <= 0 &&
-      Date.now() - globalManager.lastActivity >= INACTIVITY_TIMEOUT
+      presenceSingleton.manager &&
+      presenceSingleton.manager.userId === manager.userId &&
+      presenceSingleton.manager.subscribers <= 0 &&
+      Date.now() - presenceSingleton.manager.lastActivity >= INACTIVITY_TIMEOUT
     ) {
       cleanupPresence();
     }
@@ -254,32 +273,34 @@ export function usePresence() {
 }
 
 // Global manager instance to ensure only one connection exists
-let globalManager: PresenceManager | null = null;
+const presenceSingleton: { manager: PresenceManager | null } = { manager: null };
 
 function getOrCreateManager(
   userId: string,
   setOnlineUsers: (users: Set<string>) => void,
   setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void,
 ): PresenceManager {
-  if (globalManager && globalManager.userId === userId) {
-    updateActivity(globalManager);
-    return globalManager;
+  if (presenceSingleton.manager && presenceSingleton.manager.userId === userId) {
+    updateActivity(presenceSingleton.manager);
+    return presenceSingleton.manager;
   }
 
   // If user changed, cleanup old manager
-  if (globalManager) {
+  if (presenceSingleton.manager) {
     cleanupPresence();
   }
 
-  globalManager = createPresenceManager();
-  globalManager.userId = userId;
-  setupChannel(globalManager, userId, setOnlineUsers, setConnectionState);
+  const manager = createPresenceManager();
+  manager.userId = userId;
+  setupChannel(manager, userId, setOnlineUsers, setConnectionState);
+  presenceSingleton.manager = manager;
 
   // Add global event listeners
   window.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('beforeunload', handleBeforeUnload);
+  window.addEventListener('pagehide', handlePageHide);
 
-  return globalManager;
+  return manager;
 }
 
 export function usePresenceSubscription() {
@@ -298,12 +319,12 @@ export function usePresenceSubscription() {
   );
 
   const unsubscribe = useCallback(() => {
-    if (!globalManager) return;
+    if (!presenceSingleton.manager) return;
 
-    globalManager.subscribers--;
+    presenceSingleton.manager.subscribers--;
 
     // Cleanup when no more subscribers
-    if (globalManager.subscribers <= 0) {
+    if (presenceSingleton.manager.subscribers <= 0) {
       cleanupPresence();
     }
   }, []);
@@ -320,7 +341,7 @@ export function usePresenceSubscription() {
 }
 
 function cleanupPresence(): void {
-  const manager = globalManager;
+  const manager = presenceSingleton.manager;
   if (!manager) return;
 
   // Clear debounce timer
@@ -350,9 +371,10 @@ function cleanupPresence(): void {
   // Remove global event listeners
   window.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('beforeunload', handleBeforeUnload);
+  window.removeEventListener('pagehide', handlePageHide);
 
   // Reset global state
-  globalManager = null;
+  presenceSingleton.manager = null;
 
   // Update store state
   usePresenceStore.getState().setConnectionState('DISCONNECTED');

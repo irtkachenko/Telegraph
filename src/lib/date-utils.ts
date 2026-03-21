@@ -10,11 +10,13 @@ type DateInput = string | number | Date | null | undefined;
 export function getSafeTimestamp(date: DateInput): number {
   if (!date) return 0;
   try {
-    // Your custom string cleanup logic
-    const dateString =
-      typeof date === 'string' && !date.includes('Z') && !date.includes('+')
-        ? `${date.replace(' ', 'T')}Z`
-        : date;
+    const dateString = (() => {
+      if (typeof date !== 'string') return date;
+
+      const normalized = date.replace(' ', 'T');
+      const hasTimezone = /([zZ]|[+-]\d{2}:\d{2})$/.test(normalized);
+      return hasTimezone ? normalized : `${normalized}Z`;
+    })();
 
     const d = new Date(dateString);
     return Number.isNaN(d.getTime()) ? 0 : d.getTime();

@@ -8,6 +8,14 @@ function getChatSortDate(chat: FullChat): number {
   return new Date(date).getTime();
 }
 
+function rebuildPages(flat: FullChat[], pageSize: number): FullChat[][] {
+  const pages: FullChat[][] = [];
+  for (let i = 0; i < flat.length; i += pageSize) {
+    pages.push(flat.slice(i, i + pageSize));
+  }
+  return pages;
+}
+
 export function mapChatsInfinite(
   data: InfiniteData<FullChat[]> | undefined,
   mapper: (chat: FullChat) => FullChat | null,
@@ -41,12 +49,7 @@ export function upsertChatLastMessage(
   flat.sort((a, b) => getChatSortDate(b) - getChatSortDate(a));
 
   const pageSize = data.pages[0]?.length || DEFAULT_PAGE_SIZE;
-  const pages: FullChat[][] = [];
-  for (let i = 0; i < flat.length; i += pageSize) {
-    pages.push(flat.slice(i, i + pageSize));
-  }
-
-  return { ...data, pages };
+  return { ...data, pages: rebuildPages(flat, pageSize) };
 }
 
 export function updateChatMessageIfMatches(
@@ -66,4 +69,42 @@ export function updateChatMessageIfMatches(
   );
 
   return { ...data, pages };
+}
+
+export function upsertChat(
+  data: InfiniteData<FullChat[]> | undefined,
+  chat: FullChat,
+): InfiniteData<FullChat[]> | undefined {
+  if (!data) return data;
+
+  const flat = data.pages.flat();
+  const index = flat.findIndex((item) => item.id === chat.id);
+
+  if (index === -1) {
+    flat.unshift(chat);
+  } else {
+    flat[index] = {
+      ...flat[index],
+      ...chat,
+      messages: chat.messages ?? flat[index].messages,
+      user: chat.user ?? flat[index].user,
+      recipient: chat.recipient ?? flat[index].recipient,
+      participants: chat.participants ?? flat[index].participants,
+    };
+  }
+
+  flat.sort((a, b) => getChatSortDate(b) - getChatSortDate(a));
+  const pageSize = data.pages[0]?.length || DEFAULT_PAGE_SIZE;
+  return { ...data, pages: rebuildPages(flat, pageSize) };
+}
+
+export function removeChat(
+  data: InfiniteData<FullChat[]> | undefined,
+  chatId: string,
+): InfiniteData<FullChat[]> | undefined {
+  if (!data) return data;
+
+  const flat = data.pages.flat().filter((chat) => chat.id !== chatId);
+  const pageSize = data.pages[0]?.length || DEFAULT_PAGE_SIZE;
+  return { ...data, pages: rebuildPages(flat, pageSize) };
 }

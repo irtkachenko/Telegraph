@@ -346,7 +346,7 @@ export function useSendMessageWithFiles(chatId: string) {
                   ...msg,      // Початкові дані (з client_id та точною датою)
                   ...message,  // Дані з сервера (ID, контент)
                   client_id: msg.client_id || clientId, // Запасний варіант
-                  created_at: msg.created_at || message.created_at, // Не міняємо час
+
                   is_optimistic: false,
                 };
               }

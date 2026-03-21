@@ -53,6 +53,46 @@ export const chatsApi = {
   },
 
   /**
+   * Get a single chat with related users and latest message.
+   */
+  getChatById: async (chatId: string) => {
+    const { data, error } = await supabase
+      .from('chats')
+      .select(
+        `
+        *,
+        user:user_id(*),
+        recipient:recipient_id(*),
+        messages!messages_chat_id_chats_id_fk(
+          id,
+          content,
+          created_at,
+          sender_id,
+          chat_id,
+          attachments
+        )
+      `,
+      )
+      .eq('id', chatId)
+      .order('created_at', { foreignTable: 'messages', ascending: false })
+      .limit(1, { foreignTable: 'messages' })
+      .maybeSingle();
+
+    if (error) {
+      const networkError = new NetworkError(
+        error.message,
+        'chats',
+        'CHAT_LOAD_ERROR',
+        error.status || 500,
+      );
+      handleError(networkError, 'ChatsApi.getChatById');
+      throw networkError;
+    }
+
+    return data as FullChat | null;
+  },
+
+  /**
    * Create new chat
    */
   createChat: async (payload: { recipient_id: string }) => {

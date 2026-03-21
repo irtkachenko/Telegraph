@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useChatState } from '@/hooks/ui/useChatState';
 import { useMessageViewTimer } from '@/hooks/ui/useMessageViewTimer';
-import { useViewportDetection } from '@/hooks/ui/useViewportDetection';
+import { getSafeTimestamp } from '@/lib/date-utils';
 import { messagesApi } from '@/services';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
@@ -97,15 +97,26 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
     // 3. Convert to array and sort only if necessary
     const result = Array.from(idMap.values());
     if (result.length > 1) {
-      result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      result.sort((a, b) => getSafeTimestamp(a.created_at) - getSafeTimestamp(b.created_at));
     }
     return result;
   }, [allMessages]);
 
-  // Initialize new read detection hooks
-  const { isMessageVisible } = useViewportDetection();
   const { startViewing, stopViewing, isViewedLongEnough } = useMessageViewTimer();
-  const { isChatOpen, isWindowFocused, isDocumentVisible } = useChatState();
+  const { isChatOpen, isWindowFocused, isDocumentVisible, openChat, closeChat } = useChatState();
+
+  // Mark the current chat as open for auto-read logic.
+  useEffect(() => {
+    if (!chatId) return;
+    openChat(chatId);
+    return () => {
+      closeChat(chatId);
+    };
+  }, [chatId, openChat, closeChat]);
+
+  useEffect(() => {
+    lastMarkedRef.current = null;
+  }, [chatId]);
 
   // Advanced auto-read logic with full criteria checking
   useEffect(() => {
@@ -122,22 +133,20 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
       return;
     }
 
-    // Find visible incoming messages (only those from other users)
-    const visibleIncoming = validMessages.filter(
-      (m) => m.sender_id !== user.id && isMessageVisible(m.id),
-    );
+    // When chat is active and pinned to bottom, the newest incoming message is visible enough.
+    const incomingMessages = validMessages.filter((m) => m.sender_id !== user.id);
 
-    if (visibleIncoming.length === 0) return;
+    if (incomingMessages.length === 0) return;
 
-    // Target the newest visible incoming message
-    const targetMessage = visibleIncoming[visibleIncoming.length - 1];
+    // Target the newest incoming message from the other user.
+    const targetMessage = incomingMessages[incomingMessages.length - 1];
 
     if (!targetMessage || lastMarkedRef.current === targetMessage.id) return;
 
-    // Cleanup timers for messages that are no longer visible or not the current target
-    const visibleIds = new Set(visibleIncoming.map((m) => m.id));
+    // Cleanup timers for stale targets.
+    const incomingIds = new Set(incomingMessages.map((m) => m.id));
     readTimersRef.current.forEach((timer, messageId) => {
-      if (!visibleIds.has(messageId) || messageId !== targetMessage.id) {
+      if (!incomingIds.has(messageId) || messageId !== targetMessage.id) {
         clearTimeout(timer);
         readTimersRef.current.delete(messageId);
         stopViewing(messageId);
@@ -150,7 +159,6 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
 
       const timer = setTimeout(() => {
         const stillEligible =
-          isMessageVisible(targetMessage.id) &&
           isAtBottom &&
           isChatOpen &&
           isWindowFocused &&
@@ -175,7 +183,6 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
     isAtBottom,
     isWindowFocused,
     isDocumentVisible,
-    isMessageVisible,
     isViewedLongEnough,
     startViewing,
     stopViewing,
@@ -184,12 +191,14 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
 
   // Cleanup timers on unmount
   useEffect(() => {
+    const timers = readTimersRef.current;
+
     return () => {
-      readTimersRef.current.forEach((timer, messageId) => {
+      timers.forEach((timer, messageId) => {
         clearTimeout(timer);
         stopViewing(messageId);
       });
-      readTimersRef.current.clear();
+      timers.clear();
     };
   }, [stopViewing]);
 
