@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { storageConfig } from '@/config/storage.config';
 import { getMaxFilesPerMessage } from '@/config/upload.config';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, ValidationError } from '@/shared/lib/errors';
@@ -26,7 +25,7 @@ export interface LazyAttachment {
 export function useOptimisticAttachmentLazy() {
   const [attachments, setAttachments] = useState<LazyAttachment[]>([]);
   const { user } = useSupabaseAuth();
-  const { validateFile, validateFiles } = useStorageLimits();
+  const { validateFile, getMaxTotalSize, getMaxFileSize } = useStorageLimits();
 
   // Constants for limits
   const MAX_FILES_PER_MESSAGE = getMaxFilesPerMessage();
@@ -92,15 +91,18 @@ export function useOptimisticAttachmentLazy() {
 
   const addFiles = async (files: File[]): Promise<LazyAttachment[]> => {
     const validFiles: File[] = [];
-    const errors: string[] = [];
+    const rejectedByType: File[] = [];
+    const rejectedBySize: File[] = [];
 
-    // Check each file individually
+    // Check each file individually — separate type errors from size errors
     for (const file of files) {
       const validation = validateFile(file);
       if (validation.valid) {
         validFiles.push(file);
+      } else if (validation.error?.includes('too large') || validation.error?.includes('Maximum size')) {
+        rejectedBySize.push(file);
       } else {
-        errors.push(`${file.name}: ${validation.error}`);
+        rejectedByType.push(file);
       }
     }
 
@@ -109,43 +111,56 @@ export function useOptimisticAttachmentLazy() {
     const currentTotalSize = attachments.reduce((sum, a) => sum + a.metadata.size, 0);
 
     const allowedFiles: File[] = [];
-    const rejectedFiles: File[] = [];
+    const rejectedByCount: File[] = [];
+    const rejectedByTotalSize: File[] = [];
 
     // Calculate how many files can be added
     const remainingSlots = MAX_FILES_PER_MESSAGE - currentFilesCount;
-    // Note: max total size comes from Supabase Storage API via useStorageLimits
-    // For now, use the same default as in useDynamicStorageConfig
-    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+    const MAX_TOTAL_SIZE = getMaxTotalSize();
     const remainingSize = MAX_TOTAL_SIZE - currentTotalSize;
 
     let addedSize = 0;
     for (const file of validFiles) {
-      if (allowedFiles.length >= remainingSlots || addedSize + file.size > remainingSize) {
-        rejectedFiles.push(file);
+      if (allowedFiles.length >= remainingSlots) {
+        rejectedByCount.push(file);
+        continue;
+      }
+
+      if (addedSize + file.size > remainingSize) {
+        rejectedByTotalSize.push(file);
       } else {
         allowedFiles.push(file);
         addedSize += file.size;
       }
     }
 
-    // Show errors about exceeded limits
-    if (rejectedFiles.length > 0) {
-      const rejectedNames = rejectedFiles.map((f) => f.name).join(', ');
-      toast.error(
-        `Too many files! Maximum ${getMaxFilesPerMessage()} files per message. Not added: ${rejectedNames}`,
-      );
+    // Show toast for unsupported file types
+    if (rejectedByType.length > 0) {
+      const rejectedNames = rejectedByType.map((f) => f.name).join(', ');
+      toast.error(`File type not supported. Not added: ${rejectedNames}`);
     }
 
-    if (errors.length > 0) {
-      toast.error(`Validation errors: ${errors.join(', ')}`);
+    // Show toast for files that exceed individual size limit
+    if (rejectedBySize.length > 0) {
+      const rejectedNames = rejectedBySize.map((f) => f.name).join(', ');
+      const maxSizeMB = Math.round(getMaxFileSize('images') / 1024 / 1024);
+      toast.error(`File too large (max ${maxSizeMB}MB). Not added: ${rejectedNames}`);
     }
 
-    // If there are validation errors for individual files (not limits)
-    if (errors.length > 0 && rejectedFiles.length === 0) {
-      return [];
+    // Show toast for exceeding file count limit
+    if (rejectedByCount.length > 0) {
+      const rejectedNames = rejectedByCount.map((f) => f.name).join(', ');
+      toast.error(`Too many files. Maximum ${MAX_FILES_PER_MESSAGE} per message. Not added: ${rejectedNames}`);
     }
 
-    // Add only allowed files
+    // Show toast for exceeding total size limit
+    if (rejectedByTotalSize.length > 0) {
+      const rejectedNames = rejectedByTotalSize.map((f) => f.name).join(', ');
+      const maxTotalMB = Math.round(MAX_TOTAL_SIZE / 1024 / 1024);
+      toast.error(`Total attachment size limit is ${maxTotalMB}MB. Not added: ${rejectedNames}`);
+    }
+
+    // Add only allowed files (valid files that passed all limits)
     if (allowedFiles.length === 0) {
       return [];
     }

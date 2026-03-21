@@ -8,7 +8,7 @@ import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage } from '@/hooks/chat';
 import { useSendMessageWithFiles } from '@/hooks/chat/useSendMessageWithFiles';
 import { useOptimisticAttachmentLazy } from '@/hooks/useOptimisticAttachmentLazy';
-import { useStorageConfig } from '@/hooks/useStorageConfig';
+import { useStorageLimits } from '@/hooks/useDynamicStorageConfig';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
@@ -38,7 +38,7 @@ export default function ChatInput({
   const { user } = useSupabaseAuth();
   const { attachments, addFiles, removeAttachment, clearAttachments, hasAttachments } =
     useOptimisticAttachmentLazy();
-  const { data: storageConfig } = useStorageConfig();
+  const { getAcceptString } = useStorageLimits();
 
   const sendMessageWithFiles = useSendMessageWithFiles(chatId);
   const editMessage = useEditMessage(chatId);
@@ -183,7 +183,7 @@ export default function ChatInput({
           onChange={handleFileChange}
           multiple
           className="hidden"
-          accept={storageConfig?.limits.allowedTypes.join(',') || 'image/*,video/*'}
+          accept={getAcceptString()}
         />
 
         <button

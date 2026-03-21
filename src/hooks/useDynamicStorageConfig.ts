@@ -22,12 +22,46 @@ const DEFAULT_POLICIES: StoragePolicies = {
   maxFilesPerMessage: getMaxFilesPerMessage(), // Use app config
 };
 
+
 export function useDynamicStorageConfig() {
   return useStorageConfig();
 }
 
 export function useStorageLimits() {
   const { data: config, isLoading } = useDynamicStorageConfig();
+  const getFileExtension = (filename: string): string =>
+    filename.split('.').pop()?.toLowerCase() || '';
+
+  const normalizeExtension = (value: string): string => value.toLowerCase().replace(/^\./, '');
+
+  const isMimeLike = (value: string): boolean => value.includes('/');
+
+  const isGenericMime = (mimeType: string): boolean => {
+    const normalized = mimeType.toLowerCase().trim();
+    return normalized === '' || normalized === 'application/octet-stream';
+  };
+
+  const isMimeCompatibleWithExtension = (_mimeType: string, _extension: string): boolean => {
+    // Since we're using only MIME types from API, this function is no longer needed
+    // All validation will be done through MIME types directly
+    return true;
+  };
+
+  const matchesExtension = (_extension: string, allowedTypes: string[]): boolean => {
+    // Since we're using only MIME types, extension matching is no longer needed
+    // All validation will be done through MIME types directly
+    return false;
+  };
+
+  const matchesMime = (mimeType: string, allowedTypes: string[]): boolean => {
+    if (!mimeType) return false;
+
+    return allowedTypes.some((type) => {
+      if (!isMimeLike(type)) return false;
+      const pattern = `^${type.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
+      return new RegExp(pattern, 'i').test(mimeType);
+    });
+  };
 
   const getMaxFileSize = (category: 'images' | 'videos' | 'documents'): number => {
     if (!config) return getDefaultMaxFileSize();
@@ -38,45 +72,16 @@ export function useStorageLimits() {
     return Math.min(dynamicMaxSize, fallbackSize);
   };
 
-  const isAllowedExtension = (extension: string): boolean => {
-    const ext = extension.toLowerCase();
-    if (!config) return false; // No fallback - require API
-
-    // If server returns MIME types (e.g. image/png), extension matching is not reliable.
-    // Keep extension-based fallback using static config.
-    return false; // Will be handled by MIME validation
+  const isAllowedExtension = (_extension: string): boolean => {
+    // Since we're using only MIME types, extension validation is no longer needed
+    // All validation will be done through MIME types directly
+    return false;
   };
 
   const isAllowedMimeType = (mimeType: string): boolean => {
     if (!config) return true;
 
-    if (!mimeType) return true;
-
-    // Check if allowedTypes contains MIME types (has '/') or extensions (no '/')
-    const hasMimeTypes = config.limits.allowedTypes.some((type) => type.includes('/'));
-
-    if (hasMimeTypes) {
-      // Use MIME type validation
-      return config.limits.allowedTypes.some((type) => {
-        // type may be exact MIME (image/png) or wildcard (image/*)
-        const pattern = `^${type.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
-        return new RegExp(pattern, 'i').test(mimeType);
-      });
-    } else {
-      // Fallback to extension validation if only extensions are provided
-      // Extract extension from MIME type or use common mappings
-      const extensionFromMime = mimeType.split('/')[1]?.toLowerCase();
-      if (extensionFromMime) {
-        return config.limits.allowedTypes.some(
-          (ext) =>
-            ext.toLowerCase() === `.${extensionFromMime}` ||
-            ext.toLowerCase() === extensionFromMime,
-        );
-      }
-      // If we can't extract extension from MIME, allow the file
-      // This prevents false negatives when bucket is not found
-      return true;
-    }
+    return matchesMime(mimeType, config.limits.allowedTypes);
   };
 
   const getRateLimit = (): number => {
@@ -84,29 +89,20 @@ export function useStorageLimits() {
     return DEFAULT_POLICIES.rateLimitPerMinute;
   };
 
+  const getMaxTotalSize = (): number => {
+    // Reserved for dynamic policy in future. For now use central default.
+    return DEFAULT_POLICIES.maxTotalSize;
+  };
+
   const validateFile = (file: File): { valid: boolean; error?: string } => {
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-
-    // Prefer MIME validation if available
-    if (config && !isAllowedMimeType(file.type)) {
-      // Try extension fallback if MIME validation fails
-      if (!config.limits.allowedTypes.some((type) => type.includes('/'))) {
-        // Only extensions are provided, check extension directly
-        const fileExt = `.${extension}`;
-        const allowedExtension = config.limits.allowedTypes.some(
-          (ext) => ext.toLowerCase() === fileExt || ext.toLowerCase() === extension,
-        );
-        if (!allowedExtension) {
-          return { valid: false, error: 'File type not supported' };
-        }
-      } else {
-        return { valid: false, error: 'File type not supported' };
-      }
-    }
-
     // Fallback: no validation without API config
     if (!config) {
       return { valid: false, error: 'Service temporarily unavailable' };
+    }
+
+    // Check if file MIME type is allowed
+    if (!isAllowedMimeType(file.type)) {
+      return { valid: false, error: 'File type not supported' };
     }
 
     const maxSize = getMaxFileSize('images'); // Use default category for size check
@@ -151,14 +147,29 @@ export function useStorageLimits() {
     return { valid: true };
   };
 
+  /**
+   * Build a comprehensive `accept` attribute string for <input type="file">.
+   * Since we're using only MIME types from API, we only need to return those.
+   */
+  const getAcceptString = (): string => {
+    if (!config?.limits.allowedTypes || config.limits.allowedTypes.length === 0) {
+      return 'image/*,video/*';
+    }
+
+    // Return only MIME types from API configuration
+    return config.limits.allowedTypes.join(',');
+  };
+
   return {
     config,
     isLoading,
     getMaxFileSize,
+    getMaxTotalSize,
     isAllowedExtension,
     getRateLimit,
     validateFile,
     validateFiles,
+    getAcceptString,
   };
 }
 

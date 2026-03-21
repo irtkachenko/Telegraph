@@ -26,7 +26,7 @@ export async function GET() {
         ],
         limits: {
           maxFileSize: String(storageConfig.defaults.maxFileSize),
-          allowedTypes: getUploadAllowedExtensions().map((ext: string) => `.${ext}`),
+          allowedTypes: getUploadAllowedExtensions(),
           signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
         },
       });
@@ -45,7 +45,7 @@ export async function GET() {
         allowedTypes:
           Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
             ? bucket.allowed_mime_types
-            : getUploadAllowedExtensions().map((ext: string) => `.${ext}`),
+            : getUploadAllowedExtensions(),
         signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
       },
     };
