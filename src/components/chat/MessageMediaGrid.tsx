@@ -21,6 +21,12 @@ interface AttachmentWithUrl extends Attachment {
   processedUrl?: string;
 }
 
+interface MediaState {
+  isLoading: boolean;
+  hasError: boolean;
+  isLoaded: boolean;
+}
+
 const MediaPlaceholder = ({
   reason = 'deleted',
   isLoading = false,
@@ -57,142 +63,73 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
   // Zustand store
   const { 
     urlCache, 
-    mediaStates, 
     failedUrls, 
     setUrl, 
-    setMediaState, 
     addFailedUrl, 
     removeFailedUrl 
   } = useStorageStore();
 
   const { getUrl } = useStorageUrl();
-  const pendingRef = useRef<Set<string>>(new Set());
-  const failedCacheRef = useRef<Map<string, number>>(new Map());
-  const processingRef = useRef<Set<string>>(new Set()); // Rate limiting
-  const itemTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Per-item debouncing
+  // Simple media states map instead of complex refs
+  const [localMediaStates, setLocalMediaStates] = useState<Map<string, MediaState>>(new Map());
 
-  // Periodic refresh tick to re-check TTL
-  useEffect(() => {
-    const intervalMs = getUrlCheckInterval() * 1000;
-    if (intervalMs <= 0) return;
-
-    const id = setInterval(() => setRefreshTick(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, []);
-
-  // Initialize media states when items change
-  useEffect(() => {
-    if (!items || items.length === 0) return;
-
-    items.forEach((item) => {
-      const key = `${item.id}:${item.url}`;
-      const existing = mediaStates[key];
-      
-      if (!existing) {
-        const needsUrlResolution =
-          !item.url.startsWith('blob:') && extractStorageRef(item.url) !== null;
-        const isUploading = !!item.uploading;
-        
-        setMediaState(key, {
-          isLoading: needsUrlResolution || isUploading,
-          hasError: false,
-          isLoaded: !needsUrlResolution && !isUploading,
-        });
-      }
-    });
-  }, [items, mediaStates, setMediaState]);
-
-  // Prune local caches when items change
-  useEffect(() => {
-    if (!items || items.length === 0) return;
-    const keys = new Set(items.map((item) => `${item.id}:${item.url}`));
-
-    // Clear pending timeouts for items that no longer exist
-    itemTimeoutsRef.current.forEach((timeoutId, key) => {
-      if (!keys.has(key)) {
-        clearTimeout(timeoutId);
-        itemTimeoutsRef.current.delete(key);
-      }
-    });
-
-    failedCacheRef.current.forEach((_value, key) => {
-      if (!keys.has(key)) failedCacheRef.current.delete(key);
-    });
-  }, [items]);
-
-  // Resolve and refresh signed URLs with per-item debouncing
+  // Simplified URL resolution - no periodic refresh, no debouncing
   useEffect(() => {
     if (!items || items.length === 0) return;
 
     const now = Date.now();
     const expiryMs = storageConfig.defaults.signedUrlExpiry * 1000;
-    const bufferMs = getUrlExpiryBuffer() * 1000;
-    const retryDelayMs = getUrlCheckInterval() * 1000;
+    const bufferMs = 5 * 60 * 1000; // 5 minutes buffer
 
-    items.forEach((item) => {
+    items.forEach(async (item) => {
       const cacheKey = `${item.id}:${item.url}`;
       const originalUrl = item.url;
 
-      if (originalUrl.startsWith('blob:')) return;
+      // Skip blob URLs and deleted items
+      if (originalUrl.startsWith('blob:') || item.is_deleted) return;
 
+      // Check if we need to refresh URL
       const cached = urlCache[cacheKey];
       const needsRefresh = !cached || cached.expiresAt - now <= bufferMs;
 
       if (!needsRefresh) return;
 
-      const lastFailedAt = failedCacheRef.current.get(cacheKey);
-      if (lastFailedAt && now - lastFailedAt < retryDelayMs) return;
+      // Skip if already failed
+      if (failedUrls.has(originalUrl)) return;
+
+      // Set loading state
+      setLocalMediaStates(prev => new Map(prev).set(cacheKey, { 
+        isLoading: true, 
+        hasError: false, 
+        isLoaded: false 
+      }));
 
       const ref = extractStorageRef(originalUrl);
       if (!ref) return;
 
-      if (pendingRef.current.has(cacheKey)) return;
-      if (processingRef.current.has(cacheKey)) return;
-
-      const existingTimeout = itemTimeoutsRef.current.get(cacheKey);
-      if (existingTimeout) clearTimeout(existingTimeout);
-
-      const timeoutId = setTimeout(() => {
-        itemTimeoutsRef.current.delete(cacheKey);
-        pendingRef.current.add(cacheKey);
-        processingRef.current.add(cacheKey);
-
-        getUrl(ref.bucket, ref.path)
-          .then((resolvedUrl) => {
-            const cacheData = { url: resolvedUrl, expiresAt: Date.now() + expiryMs };
-            setUrl(cacheKey, cacheData);
-            
-            failedCacheRef.current.delete(cacheKey);
-            removeFailedUrl(originalUrl);
-
-            setMediaState(cacheKey, { isLoading: false, hasError: false, isLoaded: true });
-          })
-          .catch(() => {
-            failedCacheRef.current.set(cacheKey, Date.now());
-            addFailedUrl(originalUrl);
-            
-            setMediaState(cacheKey, { isLoading: false, hasError: true, isLoaded: false });
-          })
-          .finally(() => {
-            pendingRef.current.delete(cacheKey);
-            processingRef.current.delete(cacheKey);
-          });
-      }, 500);
-
-      itemTimeoutsRef.current.set(cacheKey, timeoutId);
+      try {
+        const resolvedUrl = await getUrl(ref.bucket, ref.path);
+        const cacheData = { url: resolvedUrl, expiresAt: Date.now() + expiryMs };
+        setUrl(cacheKey, cacheData);
+        
+        removeFailedUrl(originalUrl);
+        setLocalMediaStates(prev => new Map(prev).set(cacheKey, { 
+          isLoading: false, 
+          hasError: false, 
+          isLoaded: true 
+        }));
+      } catch (error) {
+        addFailedUrl(originalUrl);
+        setLocalMediaStates(prev => new Map(prev).set(cacheKey, { 
+          isLoading: false, 
+          hasError: true, 
+          isLoaded: false 
+        }));
+      }
     });
-  }, [items, getUrl, urlCache, setUrl, setMediaState, addFailedUrl, removeFailedUrl]);
+  }, [items, getUrl, urlCache, setUrl, addFailedUrl, removeFailedUrl, failedUrls]);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      itemTimeoutsRef.current.forEach((timeoutId) => {
-        clearTimeout(timeoutId);
-      });
-      itemTimeoutsRef.current.clear();
-    };
-  }, []);
-
+  
   // Process attachment URLs for rendering
   const processedItems = useMemo(() => {
     if (!items || items.length === 0) {
@@ -215,32 +152,38 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
   const handleImageError = useCallback((url: string) => {
     addFailedUrl(url);
     // Update all media states that share this URL (unlikely but safe)
-    Object.keys(mediaStates).forEach((key) => {
+    const updatedStates = new Map(localMediaStates);
+    Object.keys(Object.fromEntries(updatedStates)).forEach((key) => {
       if (key.includes(url)) {
-        setMediaState(key, { isLoading: false, hasError: true, isLoaded: false });
+        updatedStates.set(key, { isLoading: false, hasError: true, isLoaded: false });
       }
     });
+    setLocalMediaStates(updatedStates);
     onMediaSettled?.();
-  }, [addFailedUrl, mediaStates, onMediaSettled, setMediaState]);
+  }, [addFailedUrl, localMediaStates, onMediaSettled]);
 
   const handleImageLoad = useCallback((url: string) => {
-    Object.keys(mediaStates).forEach((key) => {
+    const updatedStates = new Map(localMediaStates);
+    Object.keys(Object.fromEntries(updatedStates)).forEach((key) => {
       if (key.includes(url)) {
-        setMediaState(key, { isLoading: false, hasError: false, isLoaded: true });
+        updatedStates.set(key, { isLoading: false, hasError: false, isLoaded: true });
       }
     });
+    setLocalMediaStates(updatedStates);
     onMediaSettled?.();
-  }, [mediaStates, onMediaSettled, setMediaState]);
+  }, [localMediaStates, onMediaSettled]);
 
   const handleImageLoadStart = useCallback(
     (url: string) => {
-      Object.keys(mediaStates).forEach((key) => {
+      const updatedStates = new Map(localMediaStates);
+      Object.keys(Object.fromEntries(updatedStates)).forEach((key) => {
         if (key.includes(url)) {
-          setMediaState(key, { isLoading: true, hasError: false, isLoaded: false });
+          updatedStates.set(key, { isLoading: true, hasError: false, isLoaded: false });
         }
       });
+      setLocalMediaStates(updatedStates);
     },
-    [mediaStates, setMediaState],
+    [localMediaStates],
   );
 
   const activeMedia = useMemo(
@@ -281,7 +224,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
     (item: AttachmentWithUrl, index: number, layoutClass: string) => {
       const itemUrl = item.processedUrl || item.url;
       const cacheKey = `${item.id}:${item.url}`;
-      const mediaState = mediaStates[cacheKey] || {
+      const mediaState = localMediaStates.get(cacheKey) || {
         isLoading: false,
         hasError: false,
         isLoaded: false,
@@ -358,7 +301,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
       handleImageError,
       handleImageLoadStart,
       activeCount,
-      mediaStates,
+      localMediaStates,
     ],
   );
 
@@ -387,7 +330,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
               const item = processedItems[0];
               const itemUrl = item.processedUrl || item.url;
               const cacheKey = `${item.id}:${item.url}`;
-              const mediaState = mediaStates[cacheKey] || {
+              const mediaState = localMediaStates.get(cacheKey) || {
                 isLoading: false,
                 hasError: false,
                 isLoaded: false,
