@@ -25,7 +25,7 @@ export function useChatDetails(chatId: string) {
           recipient:recipient_id(*)
         `)
         .eq('id', chatId)
-        .single();
+        .maybeSingle();
 
       if (error)
         throw new NetworkError(error.message, 'chats', 'CHAT_FETCH_ERROR', error.status || 500);
