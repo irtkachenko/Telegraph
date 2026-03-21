@@ -119,13 +119,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "messages_chat_id_fkey"
-            columns: ["chat_id"]
-            isOneToOne: false
-            referencedRelation: "chats"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "messages_reply_to_id_messages_id_fk"
             columns: ["reply_to_id"]
             isOneToOne: false
@@ -185,42 +178,6 @@ export type Database = {
           window_start?: string
         }
         Relationships: []
-      }
-      upload_audit: {
-        Row: {
-          chat_id: string | null
-          created_at: string | null
-          id: string
-          user_id: string
-        }
-        Insert: {
-          chat_id?: string | null
-          created_at?: string | null
-          id?: string
-          user_id: string
-        }
-        Update: {
-          chat_id?: string | null
-          created_at?: string | null
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "upload_audit_chat_id_fkey"
-            columns: ["chat_id"]
-            isOneToOne: false
-            referencedRelation: "chats"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "upload_audit_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       users: {
         Row: {
@@ -292,10 +249,6 @@ export type Database = {
       }
       cleanup_rate_limits: { Args: never; Returns: undefined }
       delete_expired_assets: { Args: never; Returns: undefined }
-      mark_chat_as_read: {
-        Args: { p_chat_id: string; p_message_id: string; p_user_id: string }
-        Returns: undefined
-      }
       rpc_create_chat: {
         Args: { p_recipient_id: string }
         Returns: {
@@ -366,7 +319,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      set_user_offline: { Args: never; Returns: undefined }
       update_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {
