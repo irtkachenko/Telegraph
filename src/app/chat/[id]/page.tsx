@@ -60,76 +60,111 @@ export default function ChatPage() {
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
-  
-  // Тригери для скролу до низу
-  const [scrollTriggers, setScrollTriggers] = useState({
-    messageSent: false,    // Нове повідомлення відправлено
-    newMessage: false,    // Нове повідомлення отримано (real-time)
-    editMessage: false,    // Повідомлення відредаговано
-    loadChat: false,       // Чат завантажено
-  });
+  const isPageLoading = isAuthLoading || isChatLoading || isMessagesLoading;
+  const prevMessagesRef = useRef<Message[]>([]);
+  const initialScrollDoneRef = useRef(false);
+  const pinToBottomUntilRef = useRef(0);
 
-  // Редірект при помилці
+  const getMessageKey = useCallback((message: Message) => message.client_id || message.id, []);
+
+  const scrollToBottom = useCallback(
+    (behavior: 'auto' | 'smooth' = 'auto', holdMs = 1400) => {
+      if (!virtuosoRef.current || messages.length === 0) return;
+
+      pinToBottomUntilRef.current = Date.now() + holdMs;
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!virtuosoRef.current || messages.length === 0) return;
+          virtuosoRef.current.scrollToIndex({
+            index: messages.length - 1,
+            align: 'end',
+            behavior,
+          });
+        });
+      });
+    },
+    [messages.length],
+  );
+
+  // Redirect on error
   useEffect(() => {
     if (!isAuthLoading && !isChatLoading && (isError || (!chat && !isMessagesLoading))) {
       router.replace('/');
     }
   }, [isAuthLoading, isChatLoading, chat, isError, router, isMessagesLoading]);
 
-  // Логіка лоадера
+  // Loader logic
   useEffect(() => {
-    const isLoading = isAuthLoading || isChatLoading || isMessagesLoading;
-    
-    if (isLoading) {
-      setShowLoader(true);
-    } else {
-      // Ховаємо лоадер з невеликою затримкою для плавності
-      const timer = setTimeout(() => setShowLoader(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthLoading, isChatLoading, isMessagesLoading]);
+    if (isPageLoading) return;
+    // Hide loader with small delay for smoothness
+    const timer = setTimeout(() => setShowLoader(false), 300);
+    return () => clearTimeout(timer);
+  }, [isPageLoading]);
 
-  // Основний useEffect для скролу до низу
+  const isLoaderVisible = isPageLoading || showLoader;
+
+  // Reset per-chat refs
   useEffect(() => {
-    const shouldScroll = Object.values(scrollTriggers).some(Boolean);
-    
-    if (shouldScroll && messages.length > 0 && virtuosoRef.current) {
-      const timer = setTimeout(() => {
-        if (virtuosoRef.current && messages.length > 0) {
-          virtuosoRef.current.scrollToIndex({
-            index: messages.length - 1,
-            align: 'end',
-            behavior: 'smooth'
-          });
-          
-          // Скидаємо всі тригери після скролу
-          setScrollTriggers({
-            messageSent: false,
-            newMessage: false,
-            editMessage: false,
-            loadChat: false,
-          });
-          
-          if (process.env.NODE_ENV === 'development') {
-            console.log('📍 Scroll to bottom triggered by:', Object.keys(scrollTriggers).filter(key => scrollTriggers[key as keyof typeof scrollTriggers]));
-          }
+    prevMessagesRef.current = [];
+    initialScrollDoneRef.current = false;
+    pinToBottomUntilRef.current = 0;
+  }, [id]);
+
+  // Scroll rules:
+  // - initial load -> jump to latest message
+  // - optimistic append -> smooth scroll
+  // - incoming realtime append -> smooth scroll
+  // - edit/delete/prepend history -> no auto-scroll
+  useEffect(() => {
+    if (messages.length === 0) {
+      prevMessagesRef.current = [];
+      return;
+    }
+
+    const prevMessages = prevMessagesRef.current;
+    const isDataReady = !isMessagesLoading && !isChatLoading;
+
+    if (isDataReady && !initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true;
+      scrollToBottom('auto', 2200);
+      prevMessagesRef.current = messages;
+      return;
+    }
+
+    if (prevMessages.length > 0) {
+      const prevLastKey = getMessageKey(prevMessages[prevMessages.length - 1]);
+      const currentLastKey = getMessageKey(messages[messages.length - 1]);
+      const wasAppendedAtBottom = messages.length > prevMessages.length && prevLastKey !== currentLastKey;
+
+      if (wasAppendedAtBottom) {
+        const prevLastIndexInCurrent = messages.findIndex((m) => getMessageKey(m) === prevLastKey);
+        const appendedMessages =
+          prevLastIndexInCurrent === -1
+            ? [messages[messages.length - 1]]
+            : messages.slice(prevLastIndexInCurrent + 1);
+
+        const hasOptimisticAppend = appendedMessages.some((m) => m.is_optimistic);
+        const hasIncomingRealtimeAppend = appendedMessages.some(
+          (m) => !!m.sender_id && m.sender_id !== user?.id,
+        );
+        const hasReplyAppend = appendedMessages.some((m) => !!m.reply_to_id);
+
+        if (hasOptimisticAppend || hasIncomingRealtimeAppend || hasReplyAppend) {
+          scrollToBottom('smooth', 1800);
         }
-      }, 50);
-      
-      return () => clearTimeout(timer);
+      }
     }
-  }, [scrollTriggers, messages.length]);
 
-  // Тригер для завантаження чату
-  useEffect(() => {
-    // Скролимо тільки коли чат завантажився вперше
-    if (!isMessagesLoading && !isChatLoading && messages.length > 0) {
-      const timer = setTimeout(() => {
-        setScrollTriggers(prev => ({ ...prev, loadChat: true }));
-      }, 100);
-      return () => clearTimeout(timer);
+    prevMessagesRef.current = messages;
+  }, [messages, isMessagesLoading, isChatLoading, scrollToBottom, getMessageKey, user?.id]);
+
+  const handleMessageMediaSettled = useCallback(() => {
+    const shouldKeepPinned = isAtBottom || Date.now() < pinToBottomUntilRef.current;
+    if (shouldKeepPinned) {
+      virtuosoRef.current?.autoscrollToBottom();
     }
-  }, [isMessagesLoading, isChatLoading, messages.length]);
+  }, [isAtBottom]);
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
@@ -146,7 +181,7 @@ export default function ChatPage() {
     scrollToMessage(messageId, { align: 'center' });
   };
 
-  // --- ОПТИМІЗАЦІЯ: Створюємо Map індексів повідомлень для O(1) пошуку ---
+  // Build index map for O(1) read-status checks
   const messageIndexMap = useMemo(() => {
     const map = new Map<string, number>();
     for (let i = 0; i < messages.length; i++) {
@@ -161,7 +196,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-[calc(100dvh-64px)] w-full bg-background relative overflow-hidden">
-      {showLoader && (
+      {isLoaderVisible && (
         <div className="absolute inset-0 z-30 flex items-center justify-center text-gray-400 bg-background backdrop-blur-md">
           <div className="flex flex-col items-center gap-2">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -170,7 +205,7 @@ export default function ChatPage() {
         </div>
       )}
       {/* Header */}
-      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-white/5 flex items-center justify-between backdrop-blur-xl bg-black/40 sticky top-0 z-20" style={{ opacity: showLoader ? 0 : 1 }}>
+      <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-white/5 flex items-center justify-between backdrop-blur-xl bg-black/40 sticky top-0 z-20" style={{ opacity: isLoaderVisible ? 0 : 1 }}>
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden border border-white/10 shadow-lg">
             <Image
@@ -203,7 +238,7 @@ export default function ChatPage() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 relative min-h-0" style={{ opacity: showLoader ? 0 : 1 }}>
+      <div className="flex-1 relative min-h-0" style={{ opacity: isLoaderVisible ? 0 : 1 }}>
         {messages.length === 0 && !isMessagesLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
             <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mb-4 border border-white/10 shadow-2xl">
@@ -218,17 +253,17 @@ export default function ChatPage() {
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
-            followOutput={false}
-            overscan={1000}
-            increaseViewportBy={{ bottom: 800, top: 800 }}
+            computeItemKey={(_index, message) => message.client_id || message.id}
+            initialTopMostItemIndex={{ index: 'LAST', align: 'end' }}
+            followOutput={(atBottom) => (atBottom ? 'auto' : false)}
+            alignToBottom
+            atBottomThreshold={32}
+            overscan={280}
+            increaseViewportBy={{ bottom: 320, top: 220 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
-              if (process.env.NODE_ENV === 'development') {
-                console.log('📍 atBottomStateChange:', atBottom, 'messages.length:', messages.length);
-              }
-              setShowScrollButton(!atBottom);
               setIsAtBottom(atBottom);
+              setShowScrollButton(!atBottom);
             }}
             startReached={() => {
               if (hasPreviousPage && !isFetchingPreviousPage) {
@@ -248,10 +283,7 @@ export default function ChatPage() {
                 currentMessageIndex <= recipientLastReadIndex;
 
               return (
-                <div 
-                  key={message.client_id || message.id} 
-                  className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5"
-                >
+                <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">
                   <MessageBubble
                     message={message}
                     currentUserId={user?.id}
@@ -270,6 +302,7 @@ export default function ChatPage() {
                     onScrollToMessage={handleScrollToMessage}
                     isHighlighed={highlightedId === message.id}
                     otherParticipantName={otherParticipant?.name || undefined}
+                    onMediaSettled={handleMessageMediaSettled}
                   />
                 </div>
               );
@@ -300,29 +333,7 @@ export default function ChatPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               onClick={() => {
-                try {
-                  if (messages.length > 0) {
-                    const lastIndex = Math.max(0, messages.length - 1);
-                    if (process.env.NODE_ENV === 'development') {
-                      console.log('📍 Scrolling to index:', lastIndex, 'of', messages.length);
-                    }
-
-                    virtuosoRef.current?.scrollToIndex({
-                      index: lastIndex,
-                      behavior: 'smooth',
-                      align: 'end',
-                    });
-                  }
-                } catch (error) {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.error('❌ Virtuoso scroll error:', error);
-                  }
-                  // Fallback: простий scroll до кінця через DOM query
-                  const container = document.querySelector('.no-scrollbar');
-                  if (container) {
-                    container.scrollTop = container.scrollHeight;
-                  }
-                }
+                scrollToBottom('smooth', 1600);
               }}
               className="absolute bottom-6 right-6 p-3 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-2xl text-white shadow-2xl z-10"
             >
@@ -343,17 +354,8 @@ export default function ChatPage() {
             editingMessage={editingMessage}
             onEditCancel={() => setEditingMessage(null)}
             onMessageSent={() => {
-              const wasEditing = !!editingMessage;
               setReplyingTo(null);
               setEditingMessage(null);
-
-              if (!wasEditing) {
-                // Тригер скролу для нового повідомлення
-                setScrollTriggers(prev => ({ ...prev, messageSent: true }));
-              } else {
-                // Тригер скролу для відредагованого повідомлення
-                setScrollTriggers(prev => ({ ...prev, editMessage: true }));
-              }
             }}
           />
         </div>

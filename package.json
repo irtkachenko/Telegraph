@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "dev:webpack": "NEXT_WEBPACK_USEPOLLING=true next dev",
     "build": "next build",
     "start": "next start",

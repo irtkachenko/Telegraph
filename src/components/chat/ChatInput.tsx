@@ -90,35 +90,35 @@ export default function ChatInput({
     e?.preventDefault();
     const trimmed = content.trim();
     const hasFiles = attachments.length > 0;
+    const isEditingFlow = !!editingMessage;
 
     if (!trimmed && !hasFiles) return;
 
-    // Очищуємо стан введення НЕГАЙНО для кращого UX
-    setContent('');
-    setTyping(false);
-    const filesToSend = attachments.map((a) => a.file);
-    clearAttachments();
-    if (onReplyCancel) onReplyCancel();
-    if (onEditCancel) onEditCancel();
-
-    // Trigger scroll
-    if (onMessageSent) onMessageSent();
+    if (isEditingFlow && !trimmed) {
+      toast.error('Повідомлення не може бути порожнім');
+      return;
+    }
 
     try {
-      if (editingMessage) {
-        // РЕДАГУВАННЯ
-        if (!trimmed) {
-          toast.error('Повідомлення не може бути порожнім');
-          setContent(trimmed);
-          return;
-        }
-
+      if (isEditingFlow && editingMessage) {
         await editMessage.mutateAsync({
           messageId: editingMessage.id,
           content: trimmed,
         });
+        setContent('');
+        setTyping(false);
+        onEditCancel?.();
       } else {
-        // ВІДПРАВКА НОВОГО
+        const filesToSend = attachments.map((a) => a.file);
+
+        // Clear input immediately for snappy UX on optimistic append
+        setContent('');
+        setTyping(false);
+        clearAttachments();
+        onReplyCancel?.();
+        onEditCancel?.();
+        onMessageSent?.();
+
         const clientId = crypto.randomUUID();
         await sendMessageWithFiles.mutateAsync({
           content: trimmed,

@@ -27,6 +27,7 @@ interface MessageBubbleProps {
   onScrollToMessage: (messageId: string) => void;
   isHighlighed?: boolean;
   otherParticipantName?: string;
+  onMediaSettled?: () => void;
 }
 
 const MessageBubble = memo(
@@ -41,6 +42,7 @@ const MessageBubble = memo(
     onScrollToMessage,
     isHighlighed,
     otherParticipantName,
+    onMediaSettled,
   }: MessageBubbleProps) => {
     // Use snake_case field names consistently (native database format)
     const senderId = message.sender_id;
@@ -61,14 +63,10 @@ const MessageBubble = memo(
       <motion.div
         id={`message-${message.id}`}
         key={message.client_id || message.id}
-        layoutId={message.client_id || message.id}
         data-highlighted={isHighlighed}
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ 
-          duration: 0.2, 
-          ease: 'easeOut'
-        }}
+        initial={false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.12, ease: 'easeOut' }}
         className={cn(
           'flex w-full mb-3 px-2.5 sm:px-4 transition-all duration-300 relative',
           isMe ? 'justify-end' : 'justify-start',
@@ -145,7 +143,7 @@ const MessageBubble = memo(
 
                 {mediaAttachments.length > 0 && (
                   <div className="rounded-xl overflow-hidden mb-1 w-full">
-                    <MessageMediaGrid items={mediaAttachments} />
+                    <MessageMediaGrid items={mediaAttachments} onMediaSettled={onMediaSettled} />
                   </div>
                 )}
 

@@ -14,6 +14,7 @@ const ImageModal = lazy(() => import('./ImageModal'));
 
 interface MessageMediaGridProps {
   items: Attachment[];
+  onMediaSettled?: () => void;
 }
 
 interface AttachmentWithUrl extends Attachment {
@@ -49,7 +50,7 @@ const MediaPlaceholder = ({
   );
 };
 
-export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
+export default function MessageMediaGrid({ items, onMediaSettled }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   
@@ -219,7 +220,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         setMediaState(key, { isLoading: false, hasError: true, isLoaded: false });
       }
     });
-  }, [addFailedUrl, mediaStates, setMediaState]);
+    onMediaSettled?.();
+  }, [addFailedUrl, mediaStates, onMediaSettled, setMediaState]);
 
   const handleImageLoad = useCallback((url: string) => {
     Object.keys(mediaStates).forEach((key) => {
@@ -227,7 +229,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         setMediaState(key, { isLoading: false, hasError: false, isLoaded: true });
       }
     });
-  }, [mediaStates, setMediaState]);
+    onMediaSettled?.();
+  }, [mediaStates, onMediaSettled, setMediaState]);
 
   const handleImageLoadStart = useCallback(
     (url: string) => {
