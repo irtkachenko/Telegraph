@@ -113,8 +113,8 @@ export default function ChatPage() {
 
   // Scroll rules:
   // - initial load -> jump to latest message
-  // - optimistic append -> smooth scroll
-  // - incoming realtime append -> smooth scroll
+  // - append from current user (optimistic or own message) -> smooth scroll
+  // - incoming append from another user -> no auto-scroll
   // - edit/delete/prepend history -> no auto-scroll
   useEffect(() => {
     if (messages.length === 0) {
@@ -145,12 +145,9 @@ export default function ChatPage() {
             : messages.slice(prevLastIndexInCurrent + 1);
 
         const hasOptimisticAppend = appendedMessages.some((m) => m.is_optimistic);
-        const hasIncomingRealtimeAppend = appendedMessages.some(
-          (m) => !!m.sender_id && m.sender_id !== user?.id,
-        );
-        const hasReplyAppend = appendedMessages.some((m) => !!m.reply_to_id);
+        const hasOwnAppend = appendedMessages.some((m) => !!m.sender_id && m.sender_id === user?.id);
 
-        if (hasOptimisticAppend || hasIncomingRealtimeAppend || hasReplyAppend) {
+        if (hasOptimisticAppend || hasOwnAppend) {
           scrollToBottom('smooth', 1800);
         }
       }
@@ -255,7 +252,7 @@ export default function ChatPage() {
             data={messages}
             computeItemKey={(_index, message) => message.client_id || message.id}
             initialTopMostItemIndex={{ index: 'LAST', align: 'end' }}
-            followOutput={(atBottom) => (atBottom ? 'auto' : false)}
+            followOutput={false}
             alignToBottom
             atBottomThreshold={32}
             overscan={280}
