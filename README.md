@@ -178,12 +178,8 @@ Stop prod stack:
 docker compose -f docker-compose.prod.yml down
 ```
 
-## 12. Operational Notes
+## 12. Live Demo
 
-- Realtime and presence rely on active Supabase subscriptions.
-- Attachments use signed URLs and can expire; storage cache handles refresh.
-- Middleware/proxy protects private routes but DB access control still depends on RLS/RPC rules.
+The project is deployed on Vercel and accessible at:
+https://trace-five-zeta.vercel.app/
 
-## 13. Current Known Technical Gaps
-
-See [`TECHNICAL_AUDIT.md`](./TECHNICAL_AUDIT.md) for the current prioritized findings and remediation plan.
