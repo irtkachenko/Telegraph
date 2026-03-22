@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-    image: trace-app:latest
+    image: telegraph-app:latest
     restart: unless-stopped
     ports:
       - "3000:3000"

@@ -38,7 +38,7 @@ const HEARTBEAT_INTERVAL = getHeartbeatInterval();
 const PRESENCE_DEBOUNCE_DELAY = getPresenceDebounceDelay();
 const INACTIVITY_TIMEOUT = getInactivityTimeout();
 const MIN_LAST_SEEN_UPDATE_INTERVAL = 15000;
-const LAST_SEEN_TS_STORAGE_KEY = 'trace:last-seen-updated-at';
+const LAST_SEEN_TS_STORAGE_KEY = 'telegraph:last-seen-updated-at';
 
 function createPresenceManager(): PresenceManager {
   return {

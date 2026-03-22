@@ -2,7 +2,7 @@
 
 ## 1. What This Project Is
 
-Trace is a realtime 1:1 messaging web application built on Next.js App Router and Supabase.
+Telegraph is a realtime 1:1 messaging web application built on Next.js App Router and Supabase.
 
 Core capabilities:
 - Google OAuth login via Supabase Auth
@@ -181,5 +181,5 @@ docker compose -f docker-compose.prod.yml down
 ## 12. Live Demo
 
 The project is deployed on Vercel and accessible at:
-https://trace-five-zeta.vercel.app/
+https://telegraph-five-zeta.vercel.app/
 
