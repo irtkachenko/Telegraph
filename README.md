@@ -1,4 +1,4 @@
-﻿# Trace (Telegraf) — Technical README
+﻿# Telegraf
 
 ## 1. What This Project Is
 
