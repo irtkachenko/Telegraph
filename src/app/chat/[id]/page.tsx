@@ -38,9 +38,9 @@ export default function ChatPage() {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [isNearBottom, setIsNearBottom] = useState(true);
-  const isCloseToBottom = isAtBottom || isNearBottom;
+  const [isCloseToBottom, setIsCloseToBottom] = useState(true);
+  const isAtBottomRef = useRef(true);
+  const isNearBottomRef = useRef(true);
   const {
     messages,
     isLoading: isMessagesLoading,
@@ -116,6 +116,8 @@ export default function ChatPage() {
     prevMessagesRef.current = [];
     initialScrollDoneRef.current = false;
     pinToBottomUntilRef.current = 0;
+    isAtBottomRef.current = true;
+    isNearBottomRef.current = true;
   }, [id]);
 
   // Refresh only current chat media cache when a chat opens/reloads.
@@ -314,17 +316,23 @@ export default function ChatPage() {
             increaseViewportBy={{ bottom: 80, top: 60 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
-              setIsAtBottom(atBottom);
+              isAtBottomRef.current = atBottom;
+              const next = atBottom || isNearBottomRef.current;
+              setIsCloseToBottom((prev) => (prev === next ? prev : next));
             }}
             rangeChanged={(range) => {
               const lastIndex = messages.length - 1;
               if (lastIndex < 0) {
-                setIsNearBottom(true);
+                isNearBottomRef.current = true;
+                const next = isAtBottomRef.current || true;
+                setIsCloseToBottom((prev) => (prev === next ? prev : next));
                 return;
               }
 
               const distanceToBottom = lastIndex - range.endIndex;
-              setIsNearBottom(distanceToBottom <= SMART_SCROLL_NEAR_BOTTOM_ITEMS);
+              isNearBottomRef.current = distanceToBottom <= SMART_SCROLL_NEAR_BOTTOM_ITEMS;
+              const next = isAtBottomRef.current || isNearBottomRef.current;
+              setIsCloseToBottom((prev) => (prev === next ? prev : next));
             }}
             startReached={() => {
               if (hasPreviousPage && !isFetchingPreviousPage) {
