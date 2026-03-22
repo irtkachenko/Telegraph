@@ -33,6 +33,7 @@ export async function handleSignOut() {
         500,
       ),
       'Auth',
+      { enableToast: false },
     );
   }
 

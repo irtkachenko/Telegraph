@@ -1,28 +1,25 @@
-'use client';
+﻿'use client';
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ProfilerOnRenderCallback } from 'react';
 import { lazy, Profiler, Suspense, useEffect, useRef } from 'react';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
 
-/**
- * Внутрішній компонент-запобіжник.
- * Використовує React.Profiler для глобального моніторингу всього дерева.
- */
 function RenderGuard({ children }: { children: React.ReactNode }) {
   const commitCount = useRef(0);
   const lastResetTime = useRef(0);
-  const lastToastTime = useRef(0);
+  const lastWarnTime = useRef(0);
   const isDev = process.env.NODE_ENV === 'development';
+  const isGuardEnabled = isDev;
 
   useEffect(() => {
-    if (!isDev) return;
+    if (!isGuardEnabled) return;
     lastResetTime.current = Date.now();
-  }, [isDev]);
+  }, [isGuardEnabled]);
 
-  if (!isDev) {
+  if (!isGuardEnabled) {
     return <>{children}</>;
   }
 
@@ -30,24 +27,20 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
     commitCount.current++;
     const now = Date.now();
 
-    // Перевіряємо частоту коммітів кожну секунду
     if (now - lastResetTime.current >= 1000) {
-      if (commitCount.current > 40 && now - lastToastTime.current > 5000) {
-        toast.error('⚠️ Глобальне перевантаження рендерами!', {
-          description: `Детектовано ${commitCount.current} коммітів за секунду. Можлива нескінченна петля оновлень.`,
-        });
-        lastToastTime.current = now;
+      if (commitCount.current > 40 && now - lastWarnTime.current > 5000) {
+        console.warn(
+          `[RenderGuard] High commit rate detected: ${commitCount.current} commits/sec`,
+        );
+        lastWarnTime.current = now;
       }
       commitCount.current = 0;
       lastResetTime.current = now;
     }
 
-    // Також відстежуємо занадто важкі комміти (більше 150мс)
-    if (actualDuration > 150 && now - lastToastTime.current > 10000) {
-      toast.warning('🐢 Важкий рендер!', {
-        description: `Останнє оновлення дерева зайняло ${actualDuration.toFixed(0)}мс. Це може спричинити фрізи.`,
-      });
-      lastToastTime.current = now;
+    if (actualDuration > 150 && now - lastWarnTime.current > 10000) {
+      console.warn(`[RenderGuard] Slow commit detected: ${actualDuration.toFixed(0)}ms`);
+      lastWarnTime.current = now;
     }
   };
 

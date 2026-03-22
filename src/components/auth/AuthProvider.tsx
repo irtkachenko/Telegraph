@@ -95,9 +95,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (!mounted) return;
 
         if (error) {
+          if (error.status === 400 || error.status === 401) {
+            // Expected unauthenticated state; don't show noisy toast.
+            setLoading(false);
+            return;
+          }
+
           handleError(
             new AuthError(error.message, 'INITIAL_USER_ERROR', error.status),
             'AuthProvider',
+            { enableToast: false },
           );
           setLoading(false);
         } else {

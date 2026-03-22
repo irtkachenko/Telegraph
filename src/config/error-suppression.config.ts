@@ -23,6 +23,8 @@ export const ERROR_SUPPRESSION_CONFIG: ErrorSuppressionRule = {
     'SIGNED_URL_ERROR',
     'GET_URL_ERROR',
     'AUTH_ERROR', // Add auth errors
+    'INITIAL_USER_ERROR',
+    'UPDATE_LAST_SEEN_ERROR',
   ],
   
   // String patterns in error messages that should trigger suppression
@@ -32,6 +34,10 @@ export const ERROR_SUPPRESSION_CONFIG: ErrorSuppressionRule = {
     'failed to create signed url',
     'failed to get url',
     'session expired', // Add session expiration
+    'session not found',
+    'session unavailable',
+    'auth session missing',
+    'refresh token not found',
     'unauthorized', // Add unauthorized access
     'authentication failed', // Add authentication failures
   ],
@@ -41,6 +47,9 @@ export const ERROR_SUPPRESSION_CONFIG: ErrorSuppressionRule = {
     'SupabaseFetch',
     'StorageApi.getUrl',
     'StorageApi.getSignedUrl',
+    'AuthProvider',
+    'Auth',
+    'UpdateLastSeen',
   ]
 };
 
